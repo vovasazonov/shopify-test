@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1-A6 are complete. Verification includes real Shopify order delivery, dashboard figures, signed replay/rejection, all automated checks, and live uninstall/reinstall. Vladimir requested a code review and Shopify-aligned refactor before A7 on 2026-09-22, and explicitly skipped B and C. A7 documentation and presentation remain pending.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1-A7 and the requested code review/refactor are complete. Verification includes real Shopify order delivery, dashboard figures, signed replay/rejection, all automated checks, and live uninstall/reinstall. Vladimir explicitly skipped B and C. The README, presentation notes, and repeatable demo helper are ready for submission.
 
 ## Priorities and working rules
 
@@ -167,14 +167,25 @@ References checked: [Shopify webhook authentication](https://shopify.dev/docs/ap
 
 Depends on A6 and the requested review/refactor.
 
-- [ ] Finalize `README.MD` using only the PDF's six requested topics: how to run, the COD rule, key decisions, actual time spent, improvements with more time, and conscious omissions. Include verified installation/run/test commands and needed environment variable names under how to run; keep internal progress and verification logs in this plan.
-- [ ] Check that a reviewer can understand how to start the app within two minutes. Replace planned statements with observed implementation details.
-- [ ] Keep coherent milestone commits, review the final changes, and prepare the Git repository link for submission.
-- [ ] Rehearse a 15-minute walkthrough: 2 minutes for context/setup, 5 for a live order and duplicate replay, 5 for the handler/model/security, and 3 for tradeoffs and scaling to 10,000 merchants.
-- [ ] Prepare for approximately 10 minutes of Q&A: raw-body verification, atomic deduplication, shop isolation, uninstall, money handling, and scaling limits.
-- [ ] When all A7 work is complete, fill in the README's Finished time and Total elapsed time next to Started. Use the actual completion date/time in Asia/Jerusalem and calculate the duration from **2026-09-22 08:30**, expressed in hours and minutes. Keep both fields empty until then.
+- [x] Finalize `README.MD` using only the PDF's six requested topics: how to run, the COD rule, key decisions, actual time spent, improvements with more time, and conscious omissions. Include verified installation/run/test commands and needed environment variable names under how to run; keep internal progress and verification logs in this plan.
+- [x] Check that a reviewer can understand how to start the app within two minutes. Replace planned statements with observed implementation details.
+- [x] Keep coherent milestone commits, review the final changes, and prepare the Git repository link for submission.
+- [x] Rehearse a 15-minute walkthrough: 2 minutes for context/setup, 5 for a live order and duplicate replay, 5 for the handler/model/security, and 3 for tradeoffs and scaling to 10,000 merchants.
+- [x] Prepare for approximately 10 minutes of Q&A: raw-body verification, atomic deduplication, shop isolation, uninstall, money handling, and scaling limits.
+- [x] When all A7 work is complete, fill in the README's Finished time and Total elapsed time next to Started. Use the actual completion date/time in Asia/Jerusalem and calculate the duration from **2026-09-22 08:30**, expressed in hours and minutes. Keep both fields empty until then.
 
 **Done when:** every required deliverable is ready, no undocumented required feature is missing, the local demo runs with `shopify app dev`, and the README shows the actual start, finish, and total elapsed time together.
+
+**Complete — A7 handoff on 2026-09-22:**
+
+- Rechecked all five pages of the original brief. The requested presentation is a live demo/code walkthrough; [presenter notes](docs/PRESENTATION.md) provide the 2/5/5/3-minute agenda, source navigation, expected metric changes, exact replay commands, a connectivity fallback, and approximately 10 minutes of Q&A. The technical sequence was rehearsed; the agenda is a suggested speaking allocation, not a claim that Vladimir completed a timed oral rehearsal.
+- README retains exactly the six requested sections. It now starts with clone/install steps, distinguishes the existing app/store from reviewer-owned setup, identifies CLI-supplied and optional environment variables, explains the actual SQLite path, and links the presenter notes under how to run. Checked these instructions against package scripts, configuration, schema, installed CLI help, and the running app.
+- Added `scripts/replay-order.mjs` and a zero-value, customer-free fixture at `docs/demo-order.json`. Each invocation sends the unchanged file bytes once, signs them with a private environment secret, and derives a stable delivery ID from their digest. Repeating the same command preserves both bytes and ID; it does not create a Shopify order. The helper rejects redirects and reports status without printing credentials or payloads.
+- Rehearsed the helper over a temporary loopback HTTP server using the real order route, fake credentials, and a disposable migrated database. First delivery and exact replay returned 200 with one order and one receipt; a wrong secret returned 401 without adding an order. The documented focused replay test also passed.
+- Rehearsed both helper invocations through the existing live development tunnel. The embedded dashboard showed one order, one COD order, 100%, USD 0.00, and `#DEMO-REPLAY`; after the second send and Refresh, all figures and the row were unchanged. Read-only comparisons confirmed identical stored orders and receipt count. Removed only that rehearsal order and its receipt, preserving the installation and restoring the empty dashboard. No Shopify orders or payments were created during A7; A6 remains the evidence for real Shopify order creation and live uninstall/reinstall.
+- `npm run setup` succeeded with no pending migrations. `npm test` passed **55 tests**; typecheck, lint, build, and diff checks passed. Re-ran lint and checked the helper's syntax after adding it. Local route timings for 20 deliveries were 0.95 ms minimum, 1.55 ms p95, and 3.82 ms maximum, excluding HTTP/tunnel transport. Only the previously documented build notices remain.
+- Reviewed the submission files for secrets, including comparison with the actual app secret without printing it. The original PDF, credentials, local databases, generated output, and unrelated untracked `.idea/` files are excluded from the A7 commit. Application behavior and dependencies did not change; B/C remain skipped.
+- Submission repository: [vovasazonov/shopify-test](https://github.com/vovasazonov/shopify-test). README completion time is recorded alongside the original 08:30 start, including all setup, review, and rehearsal work.
 
 ## B - Skipped by Vladimir's instruction
 

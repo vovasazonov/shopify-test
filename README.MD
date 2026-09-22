@@ -4,19 +4,28 @@ An embedded Shopify app for tracking incoming orders and identifying Cash-On-Del
 
 ## How to run
 
-Requires Node.js 22.12+, a Shopify Partner account, and a development store with **Cash on Delivery** enabled under **Settings > Payments > Manual payment methods**.
+Requires Node.js 22.12+, a Shopify Partner account, and a development store with **Cash on Delivery** enabled under **Settings > Payments > Manual payment methods**. The Shopify CLI is installed by `npm ci`; no global installation is needed.
+
+Clone the repository and install dependencies:
 
 ```sh
+git clone https://github.com/vovasazonov/shopify-test.git
+cd shopify-test
 npm ci
+```
+
+For your own Shopify app/store, run `npm run config:link` now, choose your app, and substitute your store domain below. Linking may rewrite `shopify.app.toml`: keep `read_orders` and all three subscriptions (`orders/create`, `app/uninstalled`, `app/scopes_update`) with their relative handler URLs. Configure development access to order data if Shopify requests it; this app does not require customer names, email addresses, phone numbers, or addresses.
+
+For the existing COD Order Watch app and development store:
+
+```sh
 RUST_LOG=info npm run setup
 npm run dev -- --store cod-order-watch-dev.myshopify.com
 ```
 
 Open the preview URL printed by the CLI to install or open the embedded app. Keep the development server running during the demo; no deployment is required. After uninstalling/reinstalling, restart `npm run dev` and reopen its preview URL to restore the local development configuration. A fresh installation starts empty; previous orders are not imported.
 
-For your own Shopify app/store, run `npm run config:link` first and substitute your store domain. After linking, preserve `read_orders` and the webhook subscriptions in `shopify.app.toml`. Configure development access to order data if Shopify requests it; this app does not require customer names, email addresses, phone numbers, or addresses.
-
-The CLI supplies `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_APP_URL`, and `SCOPES`. Keep credentials and local databases out of Git.
+The CLI supplies `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_APP_URL`, and `SCOPES`; no hand-written `.env` is needed for this workflow. `SHOP_CUSTOM_DOMAIN` is optional and unused for this dev store. SQLite lives at `prisma/dev.sqlite`, as configured in the schema; `DATABASE_URL` is not used. Keep credentials and local databases out of Git.
 
 Run the automated checks with:
 
@@ -26,6 +35,8 @@ npm run typecheck
 npm run lint
 npm run build
 ```
+
+Tests create and remove their own migrated temporary databases. For the live order demo, repeatable signed replay, and walkthrough, see [presentation notes](docs/PRESENTATION.md).
 
 ## COD rule
 
@@ -50,15 +61,15 @@ Classification reflects the order creation event and does not mean payment has b
 
 ## Actual time spent
 
-Times are local to **Asia/Jerusalem**. Elapsed time includes Shopify setup.
+Times are local to **Asia/Jerusalem**. Elapsed time includes Shopify setup, implementation, debugging, review, and demo preparation/rehearsal.
 
-| Started | Finished | Total elapsed time |
-| --- | --- | --- |
-| 2026-09-22 08:30 | | |
+| Started          | Finished         | Total elapsed time |
+| ---------------- | ---------------- | ------------------ |
+| 2026-09-22 08:30 | 2026-09-22 10:42 | 2 hours 12 minutes |
 
 ## What I would do with more time
 
-For 10,000 merchants, move to PostgreSQL and a durable webhook queue with workers, retries, dead-letter handling, and monitoring. Add reconciliation for missed orders, order-update synchronization, and complete privacy/compliance workflows before a production launch.
+For 10,000 merchants, move to PostgreSQL and a durable webhook queue with workers, retries, dead-letter handling, and monitoring. Acknowledge only after durable acceptance and retain idempotency in workers. Replace loading every order on each dashboard refresh with indexed latest-order queries and exact per-shop/per-currency aggregates. Add reconciliation for missed orders, order-update synchronization, and complete privacy/compliance workflows before a production launch.
 
 ## What I consciously left out
 

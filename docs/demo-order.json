@@ -1,0 +1,10 @@
+{
+  "id": "900000000000000001",
+  "admin_graphql_api_id": "gid://shopify/Order/900000000000000001",
+  "name": "#DEMO-REPLAY",
+  "total_price": "0.00",
+  "currency": "USD",
+  "payment_gateway_names": ["Cash on Delivery (COD)"],
+  "financial_status": "pending",
+  "created_at": "2026-09-22T08:00:00Z"
+}
