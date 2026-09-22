@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 setup and installation are complete, and A2 is complete locally. A3 webhook processing is next.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 setup and installation are complete; A2 storage and A3 webhook processing are complete locally. A4, the embedded dashboard, is next. Real Shopify order delivery remains A6.
 
 ## Priorities and working rules
 
@@ -54,7 +54,7 @@ Use the budget as a limit, not a reason to rush correctness. If setup or impleme
 
 Uses the starter from A1. Implemented locally while Partner setup was pending; A1 installation is now verified.
 
-**Complete locally:** migrations work on both the existing development database and a fresh temporary database. Sixteen automated tests cover COD examples, exact amounts, currency separation, shop isolation, both unique keys, duplicate deliveries/orders, unknown shops, invalid storage input, and rollback followed by retry. The order service is ready for A3; the live webhook route still returns 503 after authentication.
+**Complete locally:** migrations work on both the existing development database and a fresh temporary database. Sixteen A2 automated tests cover COD examples, exact amounts, currency separation, shop isolation, both unique keys, duplicate deliveries/orders, unknown shops, invalid storage input, and rollback followed by retry. A3 now connects the webhook route to this order service.
 
 - [x] Preserve the template's session storage for authentication and installed-shop checks.
 - [x] Add an Order model containing shop, Shopify order ID, name, total, currency, gateway names, order creation time, and `isCod`. Keep order IDs as strings.
@@ -69,14 +69,16 @@ Uses the starter from A1. Implemented locally while Partner setup was pending; A
 
 Depends on A1 and A2.
 
-- [ ] Implement the `orders/create` handler with the template's `authenticate.webhook(request)` before consuming or trusting the body. Inspect the installed helper so we can explain raw-body HMAC verification and constant-time comparison.
-- [ ] Reject invalid signatures, malformed payloads, missing delivery IDs, and wrong topics without writing order data. Do not turn authentication failures into success responses.
-- [ ] For a verified delivery, check that the shop is installed. Ignore unknown/uninstalled shops with a logged no-op and HTTP 200; never create an installation from an order webhook.
-- [ ] Use `X-Shopify-Webhook-Id` for persistent deduplication. Enforce uniqueness in the database rather than relying on an in-memory set or a check followed by an unprotected insert.
-- [ ] Write only the required fields and the COD result. A second delivery for an already stored order must not create a second order, even if its delivery ID differs.
-- [ ] Return HTTP 200 after the short database transaction commits; duplicates also return 200. On a transient storage failure, roll back and return 5xx so Shopify can retry.
-- [ ] Keep the request path free of external API calls and unfinished background promises. Measure acknowledgement latency locally; aim comfortably below Shopify's five-second deadline.
-- [ ] Log shop, topic, delivery ID, outcome, and useful error context without secrets or full customer payloads.
+**Complete locally:** the route uses the real Shopify authenticator, validates required fields, and awaits the atomic storage service. Signed route tests use fresh migrated SQLite databases and prove replay, rejection, unknown-shop no-ops, rollback/retry, and no outbound calls even with an expired token and refresh token. The installed SDK's raw-body HMAC and comparison code were inspected. Webhook authentication disables automatic token refresh; admin authentication retains it. Local handler timings and check results are recorded in the README. Live Shopify/tunnel delivery is still A6.
+
+- [x] Implement the `orders/create` handler with the template's `authenticate.webhook(request)` before consuming or trusting the body. Inspect the installed helper so we can explain raw-body HMAC verification and constant-time comparison.
+- [x] Reject invalid signatures, malformed payloads, missing delivery IDs, and wrong topics without writing order data. Do not turn authentication failures into success responses.
+- [x] For a verified delivery, check that the shop is installed. Ignore unknown/uninstalled shops with a logged no-op and HTTP 200; never create an installation from an order webhook.
+- [x] Use `X-Shopify-Webhook-Id` for persistent deduplication. Enforce uniqueness in the database rather than relying on an in-memory set or a check followed by an unprotected insert.
+- [x] Write only the required fields and the COD result. A second delivery for an already stored order must not create a second order, even if its delivery ID differs.
+- [x] Return HTTP 200 after the short database transaction commits; duplicates also return 200. On a transient storage failure, roll back and return 5xx so Shopify can retry.
+- [x] Keep the request path free of external API calls and unfinished background promises. Measure acknowledgement latency locally; aim comfortably below Shopify's five-second deadline.
+- [x] Log shop, topic, delivery ID, outcome, and useful error context without secrets or full customer payloads.
 
 **Done when:** one valid delivery creates one order; replaying the same delivery changes neither counts nor totals; rejected input creates no data; a failed transaction remains retryable.
 
