@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { after, afterEach, before, beforeEach, mock, test } from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { LoaderFunctionArgs } from "react-router";
@@ -15,45 +10,19 @@ import {
   formatOrderDate,
   formatOrderMoney,
 } from "../app/lib/order-display";
+import { createTestDatabase } from "./helpers/database";
 
-const root = fileURLToPath(new URL("..", import.meta.url));
 const shopA = "dashboard-alpha.myshopify.com";
 const shopB = "dashboard-beta.myshopify.com";
-let directory: string;
+let database: Awaited<ReturnType<typeof createTestDatabase>>;
 let client: PrismaClient;
 let loader: typeof import("../app/routes/app._index").loader;
 let authenticate: typeof import("../app/shopify.server").authenticate;
 let saveReceivedOrder: typeof import("../app/services/orders.server").saveReceivedOrder;
 
 before(async () => {
-  directory = mkdtempSync(path.join(tmpdir(), "cod-dashboard-tests-"));
-  cpSync(
-    path.join(root, "prisma/schema.prisma"),
-    path.join(directory, "schema.prisma"),
-  );
-  cpSync(
-    path.join(root, "prisma/migrations"),
-    path.join(directory, "migrations"),
-    { recursive: true },
-  );
-  execFileSync(
-    process.execPath,
-    [
-      path.join(root, "node_modules/prisma/build/index.js"),
-      "migrate",
-      "deploy",
-      "--schema",
-      path.join(directory, "schema.prisma"),
-    ],
-    {
-      env: { ...process.env, RUST_LOG: "info" },
-      stdio: "pipe",
-    },
-  );
-  client = new PrismaClient({
-    datasourceUrl: pathToFileURL(path.join(directory, "dev.sqlite")).href,
-  });
-  await client.$connect();
+  database = await createTestDatabase();
+  client = database.client;
   process.env.NODE_ENV = "test";
   process.env.SHOPIFY_API_KEY = "dashboard-test-api-key";
   process.env.SHOPIFY_API_SECRET = "dashboard-test-secret-not-real";
@@ -85,8 +54,7 @@ beforeEach(async () => {
 });
 afterEach(() => mock.restoreAll());
 after(async () => {
-  if (client) await client.$disconnect();
-  if (directory) rmSync(directory, { recursive: true, force: true });
+  await database?.dispose();
 });
 
 function args(shop = shopB): LoaderFunctionArgs {

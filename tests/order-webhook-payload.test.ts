@@ -85,6 +85,53 @@ test("rejects absent, unsafe, nonpositive, and malformed order IDs", () => {
     rejectsField("id", id);
 });
 
+test("uses the exact Order GID when Shopify's numeric ID loses precision", () => {
+  // Use raw JSON so this exercises the same number parsing as Shopify's SDK.
+  const identifiers = JSON.parse(
+    '{"id":820982911946154508,"admin_graphql_api_id":"gid://shopify/Order/820982911946154508"}',
+  );
+  assert.equal(Number.isSafeInteger(identifiers.id), false);
+  assert.equal(
+    parseOrderWebhook({ ...payload, ...identifiers }).orderId,
+    "820982911946154508",
+  );
+  for (const id of [payload.id, String(payload.id)]) {
+    assert.equal(
+      parseOrderWebhook({
+        ...payload,
+        id,
+        admin_graphql_api_id: `gid://shopify/Order/${payload.id}`,
+      }).orderId,
+      String(payload.id),
+    );
+  }
+});
+
+test("rejects malformed Order GIDs and inconsistent legacy IDs", () => {
+  for (const gid of [
+    123,
+    "",
+    "gid://shopify/Product/123456789",
+    "gid://shopify/Order/0",
+    "gid://shopify/Order/0123456789",
+    "gid://shopify/Order/123456789?extra=1",
+    "gid://shopify/Order/123456789\n",
+  ]) {
+    rejectsField("admin_graphql_api_id", gid);
+  }
+  for (const id of [undefined, null, 1, "1", -1, 1.5, Infinity, "0123456789"]) {
+    assert.throws(
+      () =>
+        parseOrderWebhook({
+          ...payload,
+          id,
+          admin_graphql_api_id: `gid://shopify/Order/${payload.id}`,
+        }),
+      /id must match admin_graphql_api_id/,
+    );
+  }
+});
+
 test("rejects non-object payloads", () => {
   for (const invalid of [null, undefined, [], "order", 123, true]) {
     assert.throws(() => parseOrderWebhook(invalid), InvalidOrderPayloadError);

@@ -1,15 +1,10 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { after, before, beforeEach, test } from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import type { ActionFunctionArgs } from "react-router";
+import { createTestDatabase } from "./helpers/database";
 
-const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const shopA = "alpha-webhook-test.myshopify.com";
 const shopB = "beta-webhook-test.myshopify.com";
 const secret = "webhook-integration-secret-not-a-real-credential";
@@ -43,7 +38,7 @@ const environmentKeys = [
 const originalEnvironment = new Map(
   environmentKeys.map((key) => [key, process.env[key]]),
 );
-let temporaryDirectory: string;
+let database: Awaited<ReturnType<typeof createTestDatabase>>;
 let client: PrismaClient;
 let action: typeof import("../app/routes/webhooks.orders.create").action;
 let uninstallAction: typeof import("../app/routes/webhooks.app.uninstalled").action;
@@ -55,43 +50,9 @@ let networkCalls = 0;
 let logs: unknown[][] = [];
 
 before(async () => {
-  temporaryDirectory = mkdtempSync(
-    path.join(tmpdir(), "cod-order-watch-webhook-tests-"),
-  );
-  // The real migration history runs only against a fresh disposable database.
-  cpSync(
-    path.join(projectRoot, "prisma/schema.prisma"),
-    path.join(temporaryDirectory, "schema.prisma"),
-  );
-  cpSync(
-    path.join(projectRoot, "prisma/migrations"),
-    path.join(temporaryDirectory, "migrations"),
-    { recursive: true },
-  );
-  execFileSync(
-    process.execPath,
-    [
-      path.join(projectRoot, "node_modules/prisma/build/index.js"),
-      "migrate",
-      "deploy",
-      "--schema",
-      path.join(temporaryDirectory, "schema.prisma"),
-    ],
-    {
-      cwd: projectRoot,
-      env: { ...process.env, RUST_LOG: "info" },
-      stdio: "pipe",
-    },
-  );
-  client = new PrismaClient({
-    datasourceUrl: pathToFileURL(path.join(temporaryDirectory, "dev.sqlite"))
-      .href,
-  });
-  await client.$connect();
-  secondClient = new PrismaClient({
-    datasourceUrl: pathToFileURL(path.join(temporaryDirectory, "dev.sqlite"))
-      .href,
-  });
+  database = await createTestDatabase();
+  client = database.client;
+  secondClient = new PrismaClient({ datasourceUrl: database.url });
   await secondClient.$connect();
 
   process.env.SHOPIFY_API_KEY = "webhook-test-api-key";
@@ -149,10 +110,10 @@ after(async () => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
-  if (client) await client.$disconnect();
-  if (secondClient) await secondClient.$disconnect();
-  if (temporaryDirectory) {
-    rmSync(temporaryDirectory, { recursive: true, force: true });
+  try {
+    if (secondClient) await secondClient.$disconnect();
+  } finally {
+    await database?.dispose();
   }
 });
 
@@ -252,6 +213,30 @@ test("signed route delivery persists only required fields and replay never doubl
     routeEntries().map((entry) => entry.outcome),
     ["created", "duplicate_delivery", "duplicate_order"],
   );
+  assert.equal(networkCalls, 0);
+});
+
+test("signed Shopify large-ID deliveries store the exact GID suffix and deduplicate", async () => {
+  const exactId = "820982911946154508";
+  const rawBody = JSON.stringify({
+    ...orderPayload,
+    id: exactId,
+    admin_graphql_api_id: `gid://shopify/Order/${exactId}`,
+  }).replace(`"id":"${exactId}"`, `"id":${exactId}`);
+
+  assert.equal((await deliver(signedRequest(rawBody))).status, 200);
+  assert.equal((await deliver(signedRequest(rawBody))).status, 200);
+  assert.equal(
+    (
+      await deliver(
+        signedRequest(rawBody, { "X-Shopify-Webhook-Id": "large-id-replay" }),
+      )
+    ).status,
+    200,
+  );
+  assert.equal(await client.order.count(), 1);
+  assert.equal((await client.order.findFirstOrThrow()).orderId, exactId);
+  assert.equal(await client.webhookReceipt.count(), 2);
   assert.equal(networkCalls, 0);
 });
 

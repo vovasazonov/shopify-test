@@ -8,7 +8,34 @@ export class InvalidOrderPayloadError extends Error {
   }
 }
 
-function parseOrderId(value: unknown): string {
+function parseOrderId(value: unknown, graphqlId: unknown): string {
+  if (graphqlId != null) {
+    const match =
+      typeof graphqlId === "string" && graphqlId === graphqlId.trim()
+        ? /^gid:\/\/shopify\/Order\/([1-9]\d*)$/.exec(graphqlId)
+        : null;
+    if (!match) {
+      throw new InvalidOrderPayloadError(
+        "admin_graphql_api_id",
+        "must be an Order global ID when supplied",
+      );
+    }
+    const exactId = match[1];
+    // The SDK parses JSON numbers before returning the authenticated payload.
+    // Shopify's string GID preserves digits that a large numeric id can lose.
+    // Compare the numeric representation only for consistency; never store it.
+    if (
+      (typeof value === "number" &&
+        Number.isInteger(value) &&
+        value > 0 &&
+        Number(exactId) === value) ||
+      value === exactId
+    ) {
+      return exactId;
+    }
+    throw new InvalidOrderPayloadError("id", "must match admin_graphql_api_id");
+  }
+
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
     return String(value);
   }
@@ -132,7 +159,7 @@ export function parseOrderWebhook(payload: unknown): ReceivedOrder {
   }
   const order = payload as Record<string, unknown>;
   return {
-    orderId: parseOrderId(order.id),
+    orderId: parseOrderId(order.id, order.admin_graphql_api_id),
     name: parseName(order.name),
     total: parseTotal(order.total_price),
     currency: parseCurrency(order.currency),

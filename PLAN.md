@@ -2,14 +2,14 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1-A6 are complete. Verification includes real Shopify order delivery, dashboard figures, signed replay/rejection, all automated checks, and live uninstall/reinstall. A7 documentation and presentation are next.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1-A6 are complete. Verification includes real Shopify order delivery, dashboard figures, signed replay/rejection, all automated checks, and live uninstall/reinstall. Vladimir requested a code review and Shopify-aligned refactor before A7 on 2026-09-22, and explicitly skipped B and C. A7 documentation and presentation remain pending.
 
 ## Priorities and working rules
 
-- **A - Very important:** required for a complete submission. Finish every A task before starting B.
-- **B - Important:** improve confidence after A is complete, only within the remaining budget.
-- **C - Optional:** can be skipped without compromising the required submission.
-- Work in numbered order within each priority. If a required feature breaks during B or C, return to A.
+- **A - Very important:** required for a complete submission. Complete the requested review/refactor before A7.
+- **B - Skipped:** Vladimir explicitly removed these bonus tasks from the remaining scope.
+- **C - Skipped:** Vladimir explicitly removed these optional tasks from the remaining scope.
+- Work in numbered order within A, with the requested review/refactor before A7. Fix required failures before moving on.
 - Commit after each meaningful milestone. Keep functions small and be ready to explain all code, including AI-assisted code.
 - Keep `README.MD` limited to the PDF's requested content: how to run, the COD rule, key decisions, actual time spent, improvements with more time, and conscious omissions. Keep internal progress and verification records in this plan.
 - Record actual elapsed time in the README's adjacent Started / Finished / Total elapsed time columns. Vladimir started on **2026-09-22 at 08:30 (Asia/Jerusalem)**. Leave Finished and Total elapsed time empty until A7 is complete, then calculate elapsed time from that start, including setup, debugging, and rehearsal. Estimates below are not actual time.
@@ -17,6 +17,8 @@ Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendi
 ## Time budget
 
 Target: **270 minutes (4.5 hours)**. Absolute stop: **330 minutes (5.5 hours)**.
+
+The table below is the original planning estimate. The later requested review/refactor is additional authorized work before A7; B/C allocations are no longer active. Actual elapsed time still includes all work.
 
 | Work | Planned minutes |
 | --- | ---: |
@@ -145,9 +147,25 @@ Depends on A1-A5. Fix failures before moving on.
 - Reinstalled through the Dev Dashboard. The published starter initially opened instead of the local preview; restarting `npm run dev -- --store cod-order-watch-dev.myshopify.com --no-color` restored the development configuration and automatically granted `read_orders`. Opening the CLI preview created a fresh offline session with exactly that scope. The embedded dashboard showed zero orders, zero COD orders, 0%, zero value, and the empty-state guidance. The two USD 0.50 Shopify test orders remain in the store; historical orders are intentionally not imported after reinstall. No payment was collected and no additional orders were created. The local development server remains running.
 - No application-code fixes were needed. Removed temporary signing credentials after verification and checked the final documentation diff. All A6 requirements are verified; proceed to A7.
 
+### Requested review and refactor before A7
+
+**Complete on 2026-09-22. Scope:** reviewed all tracked application code, tests, schema/migrations, and configuration against Shopify's supported template and webhook guidance. Improved existing behavior and maintainability; B/C remain skipped and A7 remains pending.
+
+- Share raw-request SDK authentication, expected-topic/delivery-ID checks, safe structured logging, and retryable error handling across the three existing webhook routes. Retain webhook-only token-refresh suppression and Shopify's thrown authentication responses.
+- Validate `app/scopes_update` payloads and update only the authenticated offline session with a conditional update, so a late delivery after uninstall cannot recreate it. Add regression coverage for this existing route.
+- Preserve large Shopify order IDs using the exact numeric suffix of a validated `admin_graphql_api_id`. Check consistency with `id`; retain rejection of unsafe numbers without an exact string identifier. This addresses the CLI sample limitation recorded in A6 without changing stored IDs or requiring a migration.
+- Consolidate temporary database setup used by integration tests; retain real migrations and isolated disposable databases. Reuse fixed display formatters and remove stale landing-page copy and unused starter CSS.
+- Preserve reviewed storage transactions, exact decimal arithmetic, shop isolation, Polaris dashboard, Shopify authentication boundaries, minimum scopes, and pinned API configuration. Production hosting, queues, privacy workflows, API upgrades, and new UI features remain outside this pass.
+
+**Verification:** `npm test` passed all **55 tests** against disposable migrated databases, including seven regression cases added for scope updates and exact Shopify global IDs. The real-SDK route tests still prove signature rejection, duplicate handling, shop isolation, transaction rollback/retry, uninstall races, secret-free logs, and zero external calls with expired tokens. Twenty local order deliveries measured 0.90 ms minimum, 1.80 ms p95, and 3.76 ms maximum, excluding HTTP/tunnel transport. `npm run typecheck`, `npm run lint`, `npm run build`, and `git diff --check` passed. Build output contains the existing React Router future-option notices and expected empty chunks for server-only routes. Independent code reviews found no remaining blockers in the changed handlers, ID parser, UI cleanup, or database-test helper.
+
+Verification for this pass was local; A6's live-store results remain the record of the earlier end-to-end checks. No schema or dependency changes were needed. A7 and the README's completion-time fields remain pending.
+
+References checked: [Shopify webhook authentication](https://shopify.dev/docs/api/shopify-app-react-router/v1/authenticate/webhook), [delivery verification and retries](https://shopify.dev/docs/apps/build/webhooks/verify-deliveries), [global IDs](https://shopify.dev/docs/api/usage/gids), [2025-10 webhook payloads](https://shopify.dev/docs/api/webhooks/2025-10), and the [official React Router template](https://github.com/Shopify/shopify-app-template-react-router).
+
 ### A7 - Finish documentation and prepare the submission
 
-Depends on A6.
+Depends on A6 and the requested review/refactor.
 
 - [ ] Finalize `README.MD` using only the PDF's six requested topics: how to run, the COD rule, key decisions, actual time spent, improvements with more time, and conscious omissions. Include verified installation/run/test commands and needed environment variable names under how to run; keep internal progress and verification logs in this plan.
 - [ ] Check that a reviewer can understand how to start the app within two minutes. Replace planned statements with observed implementation details.
@@ -158,7 +176,9 @@ Depends on A6.
 
 **Done when:** every required deliverable is ready, no undocumented required feature is missing, the local demo runs with `shopify app dev`, and the README shows the actual start, finish, and total elapsed time together.
 
-## B - Important, only after all A tasks are complete
+## B - Skipped by Vladimir's instruction
+
+The original proposed bonus tasks below are retained as planning history, not remaining work.
 
 ### B1 - Add the selected bonus: fixed-signature HMAC test
 
@@ -175,7 +195,9 @@ Depends on A6.
 
 **Done when:** the added tests exercise meaningful failure modes and the app remains ready for presentation.
 
-## C - Optional and safe to skip
+## C - Skipped by Vladimir's instruction
+
+The original optional ideas below are retained as planning history, not remaining work.
 
 ### C1 - Dashboard convenience and visual polish
 

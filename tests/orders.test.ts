@@ -1,22 +1,17 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { after, before, beforeEach, test } from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { sumAmountsByCurrency } from "../app/lib/money";
 import {
   getOrdersForShop,
   saveReceivedOrder,
   type ReceivedOrder,
 } from "../app/services/orders.server";
+import { createTestDatabase } from "./helpers/database";
 
-const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const shopA = "alpha-test.myshopify.com";
 const shopB = "beta-test.myshopify.com";
-let temporaryDirectory: string;
+let database: Awaited<ReturnType<typeof createTestDatabase>>;
 let client: PrismaClient;
 
 const order: ReceivedOrder = {
@@ -30,40 +25,8 @@ const order: ReceivedOrder = {
 };
 
 before(async () => {
-  temporaryDirectory = mkdtempSync(
-    path.join(tmpdir(), "cod-order-watch-tests-"),
-  );
-  // Run the real migration history against a fresh, disposable SQLite database.
-  // The copied schema's relative database path cannot reach the local dev DB.
-  cpSync(
-    path.join(projectRoot, "prisma/schema.prisma"),
-    path.join(temporaryDirectory, "schema.prisma"),
-  );
-  cpSync(
-    path.join(projectRoot, "prisma/migrations"),
-    path.join(temporaryDirectory, "migrations"),
-    { recursive: true },
-  );
-  execFileSync(
-    process.execPath,
-    [
-      path.join(projectRoot, "node_modules/prisma/build/index.js"),
-      "migrate",
-      "deploy",
-      "--schema",
-      path.join(temporaryDirectory, "schema.prisma"),
-    ],
-    {
-      cwd: projectRoot,
-      env: { ...process.env, RUST_LOG: "info" },
-      stdio: "pipe",
-    },
-  );
-  client = new PrismaClient({
-    datasourceUrl: pathToFileURL(path.join(temporaryDirectory, "dev.sqlite"))
-      .href,
-  });
-  await client.$connect();
+  database = await createTestDatabase();
+  client = database.client;
 });
 
 beforeEach(async () => {
@@ -84,9 +47,7 @@ beforeEach(async () => {
 });
 
 after(async () => {
-  if (client) await client.$disconnect();
-  if (temporaryDirectory)
-    rmSync(temporaryDirectory, { recursive: true, force: true });
+  await database?.dispose();
 });
 
 test("persists exact values and derives COD without altering the template session", async () => {

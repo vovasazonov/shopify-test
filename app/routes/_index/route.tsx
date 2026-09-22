@@ -23,8 +23,8 @@ export default function App() {
       <div className={styles.content}>
         <h1 className={styles.heading}>COD Order Watch</h1>
         <p className={styles.text}>
-          Order tracking is being set up. Open the app in your Shopify admin to
-          continue.
+          Track incoming orders and identify Cash-On-Delivery (COD) orders. Open
+          the app in your Shopify admin to view your dashboard.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
