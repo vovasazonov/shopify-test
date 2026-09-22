@@ -1,1 +1,31 @@
 Shopify-Interview-Task.pdf
+
+# Dependencies and generated output
+node_modules/
+.DS_Store
+/.cache/
+/build/
+/app/build/
+/public/build/
+/public/_dev/
+/app/public/build/
+/extensions/*/dist/
+.react-router/
+coverage/
+*.tsbuildinfo
+*.log
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+
+# Local databases, including SQLite journals
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# Shopify CLI local state
+.shopify/
+.shopify.lock

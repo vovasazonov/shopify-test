@@ -1,0 +1,13 @@
+.cache
+build
+node_modules
+.git
+.shopify
+.react-router
+.env
+.env.*
+**/*.sqlite
+**/*.sqlite-*
+**/*.db
+**/*.db-*
+Shopify-Interview-Task.pdf

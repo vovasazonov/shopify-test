@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. Implementation has not started.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 is in progress; the Shopify installation is waiting for access to a Partner organization.
 
 ## Priorities and working rules
 
@@ -38,13 +38,15 @@ Use the budget as a limit, not a reason to rush correctness. If setup or impleme
 
 ### A1 - Set up Shopify and install the starter app
 
+**Progress:** the official React Router starter is prepared locally; session database initialization, typecheck, lint, and build pass. Shopify sign-in succeeded, but the account has no accessible Partner organization or development store. `shopify app init` stopped with `No Organization found`, so the official template source was copied while an invitation to the existing Partner organization is arranged. App creation/linking, installation, granted-scope verification, protected data setup, COD activation, and live webhook configuration are still pending.
+
 - [ ] Create or confirm a Partner account and development store; enable the manual Cash on Delivery payment method.
-- [ ] Use TypeScript and the Shopify CLI React Router template with Prisma/SQLite. Use a Node version supported by the generated project and current CLI; current CLI documentation requires Node 22.12+.
+- [x] Use TypeScript and the Shopify CLI React Router template with Prisma/SQLite. Tested locally with Node 26.5.0 and Shopify CLI 4.8.0; the project requires Node 22.12+.
 - [ ] Scaffold with `shopify app init`, bring the generated app into this repository without overwriting these documents, and run `shopify app dev`.
 - [ ] Install the app on the dev store and open its embedded page.
 - [ ] Request the minimum necessary `read_orders` scope, resolve any required protected customer data access setup, and confirm the installed app has the scope.
 - [ ] Declare `orders/create` and `app/uninstalled` in `shopify.app.toml` under `[[webhooks.subscriptions]]`, using relative handler URLs and the template's supported API version. Confirm the dev configuration is applied.
-- [ ] Add `.env` and other local secrets, database files, and generated artifacts to `.gitignore` before committing app files. The current ignore file only excludes the task PDF.
+- [x] Add `.env` and other local secrets, database files, and generated artifacts to `.gitignore` before committing app files. Preserve the task PDF exclusion and commit the dependency lockfile.
 
 **Done when:** the app opens inside the dev store, local development works, and subscription/scopes configuration is in place. No hosting deployment is required.
 
