@@ -1,5 +1,8 @@
 Shopify-Interview-Task.pdf
 
+# Local IDE settings
+.idea/
+
 # Dependencies and generated output
 node_modules/
 .DS_Store
