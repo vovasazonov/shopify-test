@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 is in progress; the Shopify installation is waiting for access to a Partner organization.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A2 is complete locally. A1's Shopify installation is still waiting for access to a Partner organization.
 
 ## Priorities and working rules
 
@@ -52,14 +52,16 @@ Use the budget as a limit, not a reason to rush correctness. If setup or impleme
 
 ### A2 - Define shop-scoped storage and the COD rule
 
-Depends on A1.
+Uses the local starter from A1. Proceeding locally while Partner access is pending was approved; A1 still needs to finish before live Shopify verification.
 
-- [ ] Preserve the template's session storage for authentication and installed-shop checks.
-- [ ] Add an Order model containing shop, Shopify order ID, name, total, currency, gateway names, order creation time, and `isCod`. Keep order IDs as strings.
-- [ ] Enforce unique `(shop, orderId)` and `(shop, webhookId)` keys, using a separate webhook receipt model for delivery IDs.
-- [ ] Save the receipt and order in one database transaction so a failed write cannot permanently mark an event as processed.
-- [ ] Store exact decimal amounts and use decimal arithmetic for totals; do not sum different currencies together.
-- [ ] Implement a small COD classifier: trim and lowercase gateway names; COD is true if any contains `cash`, or if `financial_status` is `pending` and a normalized gateway equals `manual`.
+**Complete locally:** migrations work on both the existing development database and a fresh temporary database. Sixteen automated tests cover COD examples, exact amounts, currency separation, shop isolation, both unique keys, duplicate deliveries/orders, unknown shops, invalid storage input, and rollback followed by retry. The order service is ready for A3; the live webhook route still returns 503 after authentication.
+
+- [x] Preserve the template's session storage for authentication and installed-shop checks.
+- [x] Add an Order model containing shop, Shopify order ID, name, total, currency, gateway names, order creation time, and `isCod`. Keep order IDs as strings.
+- [x] Enforce unique `(shop, orderId)` and `(shop, webhookId)` keys, using a separate webhook receipt model for delivery IDs.
+- [x] Save the receipt and order in one database transaction so a failed write cannot permanently mark an event as processed.
+- [x] Store exact decimal amounts and use decimal arithmetic for totals; do not sum different currencies together.
+- [x] Implement a small COD classifier: trim and lowercase gateway names; COD is true if any contains `cash`, or if `financial_status` is `pending` and a normalized gateway equals `manual`.
 
 **Done when:** migrations work on an empty database, the classifier has explicit examples, and all order reads/writes require a shop. Include cash, pending/manual, paid/manual, and missing-gateway examples.
 

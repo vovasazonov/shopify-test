@@ -14,21 +14,47 @@ datasource db {
 }
 
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+
+  @@index([shop, isOnline])
+}
+
+model Order {
+  shop         String
+  orderId      String
+  name         String
+  // SQLite REAL is approximate. Keep canonical decimal text and sum with Big.js.
+  total        String
+  currency     String
+  gatewayNames Json
+  createdAt    DateTime
+  isCod        Boolean
+  receivedAt   DateTime @default(now())
+
+  @@id([shop, orderId])
+  @@index([shop, createdAt, orderId])
+}
+
+model WebhookReceipt {
+  shop       String
+  webhookId  String
+  receivedAt DateTime @default(now())
+
+  @@id([shop, webhookId])
 }

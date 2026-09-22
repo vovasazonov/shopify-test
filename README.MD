@@ -2,7 +2,7 @@
 
 An embedded Shopify app being built to watch incoming orders and show merchants how many are Cash-On-Delivery (COD).
 
-**Status: A1 in progress.** The local starter is prepared from Shopify's official React Router template (source commit `e548c95`). Database initialization, typecheck, lint, and build pass. Shopify sign-in succeeded, but app creation and installation are blocked until the account is invited to a Partner organization with app-development and development-store access. The CLI's `app init` attempt stopped with `No Organization found`. Order storage, COD processing, and the dashboard are not implemented yet. See [PLAN.md](PLAN.md) for the prioritized implementation checklist: complete A first, then B if time permits; C can be skipped.
+**Status: A2 complete locally; A1 installation pending.** The starter comes from Shopify's official React Router template (source commit `e548c95`). Shop-scoped order storage, atomic delivery receipts, COD classification, and exact currency totals are implemented and tested. Shopify sign-in succeeded, but app creation and installation are blocked until the account is invited to a Partner organization with app-development and development-store access. The CLI's `app init` attempt stopped with `No Organization found`. The webhook HTTP handler and dashboard still need implementation. See [PLAN.md](PLAN.md) for the prioritized implementation checklist: complete A first, then B if time permits; C can be skipped.
 
 ## Task and expected behavior
 
@@ -30,6 +30,7 @@ Local preparation uses the repository's package scripts:
 ```sh
 npm ci
 npm run setup
+npm test
 npm run typecheck
 npm run lint
 npm run build
@@ -46,13 +47,13 @@ The remaining Shopify workflow requires Partner organization access and has **no
 
 Shopify CLI supplies `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_APP_URL`, and `SCOPES` during development. Keep credentials, local SQLite databases, and `.shopify` state out of Git; the dependency lockfile is committed. No production deployment is required.
 
-The initial page is a setup placeholder. The `orders/create` endpoint authenticates requests but returns HTTP 503 until A3 implements persistence; it must not acknowledge orders that it cannot save. Shopify retries are finite, so create demonstration orders only after A3. The template's session cleanup and scopes-update handlers are retained; complete uninstall cleanup remains A5.
+The initial page is a setup placeholder. The `orders/create` endpoint authenticates requests but returns HTTP 503 until A3 connects verified payload handling to the storage service; it must not acknowledge orders that it cannot save. Shopify retries are finite, so create demonstration orders only after A3. The template's session cleanup and scopes-update handlers are retained; complete uninstall cleanup remains A5.
 
 This workflow follows [Shopify's scaffolding guide](https://shopify.dev/docs/apps/build/scaffold-app) and [webhook subscription guide](https://shopify.dev/docs/apps/build/webhooks/get-started?deliveryMethod=http).
 
-## Planned COD rule
+## COD rule
 
-Normalize `payment_gateway_names` by trimming and lowercasing each name. Classify an order as COD when either condition holds:
+Implemented in `app/lib/cod.ts`. Normalize `payment_gateway_names` by trimming and lowercasing each name. Classify an order as COD when either condition holds:
 
 1. Any gateway name contains `cash`.
 2. `financial_status` is `pending` and one normalized gateway name is exactly `manual`.
@@ -67,7 +68,17 @@ Normalize `payment_gateway_names` by trimming and lowercasing each name. Classif
 
 This follows the task's heuristic. It may classify another cash-named method as COD, and it does not mean payment has been collected. With only `orders/create`, classification reflects the creation event; later edits are outside the initial scope.
 
-## Planned technical decisions
+## Storage and exact amounts
+
+`prisma/schema.prisma` preserves Shopify's Session model and adds Order and WebhookReceipt. Their compound primary keys are `(shop, orderId)` and `(shop, webhookId)`. Order IDs stay strings; gateway names are stored as a JSON array.
+
+`app/services/orders.server.ts` exposes `saveReceivedOrder(shop, webhookId, order)` and `getOrdersForShop(shop)`. Both require a nonempty shop. Saving checks for an existing offline session, inserts the delivery receipt, and creates the order in one SQLite transaction. Unknown/uninstalled shops create no records. A repeated delivery returns `duplicate_delivery`; another delivery for the same order records its new receipt and returns `duplicate_order` without replacing the original order. Other storage failures propagate after rollback so A3 can return a retryable response. Expired offline access tokens do not by themselves mean an app was uninstalled.
+
+Order totals use canonical decimal text in SQLite, avoiding its approximate floating-point storage. `app/lib/money.ts` uses Big.js for exact addition and returns one total per currency. It accepts nonnegative plain decimal strings, removes unnecessary leading/trailing zeros without rounding, and rejects JavaScript numbers, exponent notation, and invalid currency-code formats. Display formatting belongs to A4; stored precision is not restricted to two decimal places. See [SQLite floating-point behavior](https://www.sqlite.org/floatingpoint.html) and the [Big.js API](https://mikemcl.github.io/big.js/).
+
+The webhook route has not yet been wired to this service. A5 must also replace the template uninstall handler with a transaction that deletes orders, receipts, and sessions together, so a concurrent delivery cannot restore uninstalled-shop data.
+
+## Technical decisions and remaining integration
 
 | Decision | Reason |
 | --- | --- |
@@ -84,12 +95,13 @@ The dashboard will count all persisted orders received by the app, not historica
 
 ## Verification
 
-Local A1 checks on 2026-09-22:
+Local checks on 2026-09-22 (rerun for A2 where applicable):
 
 | Command | Result |
 | --- | --- |
 | `npm install --no-audit --no-fund` | Passed; dependencies and lockfile installed. |
-| `RUST_LOG=info npm run setup` | Passed; generated Prisma Client and applied the initial session migration to a new SQLite database. |
+| `RUST_LOG=info npm run setup` | Passed; generated Prisma Client and applied the order-storage migration to the development database. |
+| `npm test` | Passed: 16 tests. Uses a fresh temporary SQLite database with both committed migrations and removes it afterward. Never resets the development database. |
 | `npm run typecheck` | Passed. |
 | `npm run lint` | Passed. |
 | `npm run build` | Passed for browser and server bundles. |
@@ -97,7 +109,9 @@ Local A1 checks on 2026-09-22:
 
 The agent environment injects `RUST_LOG=warn`, which causes Prisma's schema engine to fail on a fresh SQLite database with an empty error. Fresh-database checks succeeded with `RUST_LOG` unset or set to `info`, matching [Prisma issue #29355](https://github.com/prisma/prisma/issues/29355). If this occurs, run `RUST_LOG=info npm run setup`. No database or schema workaround was needed.
 
-No automated business-behavior tests or live Shopify checks have run. A6 will add automated COD and duplicate-persistence coverage and verify a real order, shop isolation, invalid requests, storage retries, empty state, and uninstall behavior. Docker deployment has not been tested.
+Automated coverage includes COD rules, exact decimal/currency handling, shop isolation, database uniqueness, delivery/order replay, absent installations, invalid storage input, and an actual SQLite trigger failure proving transactional rollback and successful retry. A6 still needs HTTP/HMAC integration and real Shopify order verification, dashboard limits/empty state, uninstall, and the remaining end-to-end cases. No live Shopify checks or Docker deployment tests have run.
+
+Dependency audit: npm currently reports 19 high-severity dependency entries rooted in unchanged starter tooling dependencies (`lodash`, `minimatch`, and `deepmerge-ts`). The A2 additions (`big.js`, `@types/big.js`, and `tsx`) were not flagged. Dependency remediation remains pending; no forced upgrades or incompatible Prisma downgrades were applied during A2. This audit does not establish whether an advisory is reachable through the app's request handlers.
 
 For manual delivery checks, create a real order in the dev store and use `shopify app webhook trigger` for signed synthetic events. For the duplicate demonstration, replay the same body **and the same `X-Shopify-Webhook-Id`**; invoking the CLI twice is insufficient unless the delivery ID is preserved. The exact replay procedure will be documented after implementation.
 
@@ -111,12 +125,12 @@ Elapsed time is measured for the current work session, including account setup a
 | --- | --- | --- |
 | Brief review and planning | Not recorded | Planning documents created |
 | Shopify account, store, and scaffold | 10 | Local preparation and checks; Partner invitation and store setup pending |
-| Data model and webhooks | Not started | Pending |
+| Data model and local tests | 9 | A2 complete locally; webhook integration remains A3 |
 | Dashboard and uninstall | Not started | Pending |
 | Tests and fixes | Not started | Pending |
 | Final README and demo rehearsal | Not started | Pending |
 | Optional bonus / additional tests | Not started | Pending |
-| **Recorded subtotal** | **10** | Earlier planning time still needs to be added |
+| **Recorded subtotal** | **19** | Earlier planning time still needs to be added |
 
 ## Scope choices and more time
 
