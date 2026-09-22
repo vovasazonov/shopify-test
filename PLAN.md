@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1-A5 are complete. A6 has verified real Shopify order delivery, dashboard figures, signed replay/rejection, and all automated checks; the live uninstall/reinstall check is awaiting confirmation. A7 documentation and presentation remain next.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1-A6 are complete. Verification includes real Shopify order delivery, dashboard figures, signed replay/rejection, all automated checks, and live uninstall/reinstall. A7 documentation and presentation are next.
 
 ## Priorities and working rules
 
@@ -127,12 +127,12 @@ Depends on A1-A5. Fix failures before moving on.
 - [x] Create a real COD order in the development store, refresh the dashboard, and compare the row, counts, percentage, and amount. Also verify a non-COD order.
 - [x] Use `shopify app webhook trigger` to check signed synthetic delivery. Prove replay separately with the **same body and same `X-Shopify-Webhook-Id`**; do not assume two CLI invocations reuse the ID.
 - [x] Check invalid HMAC, malformed payload, unknown shop, zero orders, and more than 20 orders. Aggregates must include all orders, while the table contains only 20.
-- [ ] Check storage failure/retry behavior, uninstall cleanup, repeat uninstall, and late delivery after uninstall.
+- [x] Check storage failure/retry behavior, uninstall cleanup, repeat uninstall, and late delivery after uninstall.
 - [x] Run the scaffold's available type, lint, build, and test checks. Record actual commands and results in this plan; keep the README's run/check instructions current and inspect staged files for secrets.
 
 **Done when:** required cases pass, there is at least one meaningful automated test, and the end-to-end demo works. The specific fixed-signature HMAC bonus remains B1.
 
-**A6 verification on 2026-09-22 (lifecycle check pending):**
+**Complete — A6 verification on 2026-09-22:**
 
 - Created two real orders in the development store, with no customer contact details, taxes, shipping, or card charges. Per Vladimir's limit, each was **USD 0.50**, **USD 1.00 combined**. The initial USD 25.50 draft was reduced before order creation. Order `#1001` was created unpaid with no gateway and correctly classified non-COD; `#1002` was manually marked paid using `Cash on Delivery (COD)` and correctly classified COD. Both arrived through Shopify's actual `orders/create` subscription. The embedded dashboard's Refresh showed 2 orders, 1 COD, 50%, USD 1.00, and both correct rows.
 - Sent separately signed requests to the live tunnel: invalid HMAC returned 401; malformed JSON and missing required fields returned 400; an unknown shop returned 200. None wrote orders or receipts. Replayed exactly the same raw body and `X-Shopify-Webhook-Id`: both requests returned 200, and the second changed neither orders nor receipts. A different delivery ID for the same order also kept the order count unchanged.
@@ -140,7 +140,10 @@ Depends on A1-A5. Fix failures before moving on.
 - Ran `npm run shopify -- app webhook trigger --topic orders/create --api-version 2025-10 --delivery-method http --address <development-endpoint>`, with the client secret supplied privately via `SHOPIFY_FLAG_CLIENT_SECRET`. The remote command reported enqueued delivery. A temporary loopback receiver then verified the CLI sample's HMAC and forwarded its unchanged body and Shopify headers to the live endpoint, confirming HTTP 400. The fixed sample's numeric ID is larger than `Number.MAX_SAFE_INTEGER`, so the existing deliberate validation rejects it rather than storing a rounded ID. Real Shopify orders and independently signed string-ID fixtures passed; the CLI sample is not evidence of a subscription failure.
 - Repeated the CLI check with `--topic app/uninstalled` and the uninstall endpoint. The signed sample for `shop.myshopify.com` returned HTTP 200 through the same temporary receiver, and the CLI reported successful local delivery. The installed development shop remained untouched.
 - `npm test` passed all **48 tests** against disposable migrated databases, including two-shop isolation, transaction failure/rollback/retry, repeated uninstall, late deliveries, and both uninstall/order race directions. `npm run typecheck`, `npm run lint`, and `npm run build` passed. Build output contained only the existing React Router future-option notices.
-- `git diff --cached --check` passed; staged documentation was checked against the actual private app secret and credential/token patterns without printing credentials. The live uninstall confirmation remains open; no uninstall has occurred yet. README finish and elapsed time remain blank until A7.
+- `git diff --cached --check` passed; staged documentation was checked against the actual private app secret and credential/token patterns without printing credentials. README finish and elapsed time remain blank until A7.
+- With Vladimir’s confirmation, uninstalled COD Order Watch in Shopify. The actual `app/uninstalled` delivery removed all 21 app orders, 22 delivery receipts, and the offline session. Read-only database counts confirmed zero orders, receipts, and sessions before any synthetic cleanup request. A subsequent signed repeat uninstall and late zero-value order delivery both returned 200 and left all three counts at zero.
+- Reinstalled through the Dev Dashboard. The published starter initially opened instead of the local preview; restarting `npm run dev -- --store cod-order-watch-dev.myshopify.com --no-color` restored the development configuration and automatically granted `read_orders`. Opening the CLI preview created a fresh offline session with exactly that scope. The embedded dashboard showed zero orders, zero COD orders, 0%, zero value, and the empty-state guidance. The two USD 0.50 Shopify test orders remain in the store; historical orders are intentionally not imported after reinstall. No payment was collected and no additional orders were created. The local development server remains running.
+- No application-code fixes were needed. Removed temporary signing credentials after verification and checked the final documentation diff. All A6 requirements are verified; proceed to A7.
 
 ### A7 - Finish documentation and prepare the submission
 

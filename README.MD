@@ -12,7 +12,7 @@ RUST_LOG=info npm run setup
 npm run dev -- --store cod-order-watch-dev.myshopify.com
 ```
 
-Open the preview URL printed by the CLI to install or open the embedded app. Keep the development server running during the demo; no deployment is required.
+Open the preview URL printed by the CLI to install or open the embedded app. Keep the development server running during the demo; no deployment is required. After uninstalling/reinstalling, restart `npm run dev` and reopen its preview URL to restore the local development configuration. A fresh installation starts empty; previous orders are not imported.
 
 For your own Shopify app/store, run `npm run config:link` first and substitute your store domain. After linking, preserve `read_orders` and the webhook subscriptions in `shopify.app.toml`. Configure development access to order data if Shopify requests it; this app does not require customer names, email addresses, phone numbers, or addresses.
 
@@ -63,5 +63,3 @@ For 10,000 merchants, move to PostgreSQL and a durable webhook queue with worker
 ## What I consciously left out
 
 Historical order backfill, Shopify order tagging, `orders/updated`, compliance webhooks, custom OAuth, production hosting, and advanced dashboard controls are outside the current implementation. The optional fixed-signature HMAC bonus test has not been completed.
-
-Required verification still pending: live uninstall/reinstall. Real Shopify order delivery and dashboard behavior have been verified.
