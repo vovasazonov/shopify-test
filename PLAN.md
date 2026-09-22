@@ -11,7 +11,8 @@ Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendi
 - **C - Optional:** can be skipped without compromising the required submission.
 - Work in numbered order within each priority. If a required feature breaks during B or C, return to A.
 - Commit after each meaningful milestone. Keep functions small and be ready to explain all code, including AI-assisted code.
-- Record actual elapsed work in `README.MD`, including planning, account setup, debugging, and rehearsal. Estimates below are not actual time.
+- Keep `README.MD` limited to the PDF's requested content: how to run, the COD rule, key decisions, actual time spent, improvements with more time, and conscious omissions. Keep internal progress and verification records in this plan.
+- Record actual elapsed time in the README's adjacent Started / Finished / Total elapsed time columns. Vladimir started on **2026-09-22 at 08:30 (Asia/Jerusalem)**. Leave Finished and Total elapsed time empty until A7 is complete, then calculate elapsed time from that start, including setup, debugging, and rehearsal. Estimates below are not actual time.
 
 ## Time budget
 
@@ -69,7 +70,9 @@ Uses the starter from A1. Implemented locally while Partner setup was pending; A
 
 Depends on A1 and A2.
 
-**Complete locally:** the route uses the real Shopify authenticator, validates required fields, and awaits the atomic storage service. Signed route tests use fresh migrated SQLite databases and prove replay, rejection, unknown-shop no-ops, rollback/retry, and no outbound calls even with an expired token and refresh token. The installed SDK's raw-body HMAC and comparison code were inspected. Webhook authentication disables automatic token refresh; admin authentication retains it. Local handler timings and check results are recorded in the README. Live Shopify/tunnel delivery is still A6.
+**Complete locally:** the route uses the real Shopify authenticator, validates required fields, and awaits the atomic storage service. Signed route tests use fresh migrated SQLite databases and prove replay, rejection, unknown-shop no-ops, rollback/retry, and no outbound calls even with an expired token and refresh token. The installed SDK's raw-body HMAC and comparison code were inspected. Webhook authentication disables automatic token refresh; admin authentication retains it. Live Shopify/tunnel delivery is still A6.
+
+**Verification on 2026-09-22:** `npm test` passed 34 tests (16 A2, 11 payload-validation, 7 real-SDK route integration); `npm run typecheck`, `npm run lint`, `npm run build`, and `git diff --check` passed. Twenty sequential new deliveries measured 0.90 ms minimum, 1.28 ms p95, and 3.56 ms maximum through the local route action, excluding HTTP transport and the tunnel. The tests use fresh migrated temporary SQLite databases, never reset the development database, and generate signatures with fake credentials. Replay uses the same body and delivery ID, then a new delivery ID for the same order. A trigger-induced storage failure rolls back the receipt and returns 503; retry returns 200 after removing the trigger. This is not the independently precomputed fixed-signature B1 bonus.
 
 - [x] Implement the `orders/create` handler with the template's `authenticate.webhook(request)` before consuming or trusting the body. Inspect the installed helper so we can explain raw-body HMAC verification and constant-time comparison.
 - [x] Reject invalid signatures, malformed payloads, missing delivery IDs, and wrong topics without writing order data. Do not turn authentication failures into success responses.
@@ -115,7 +118,7 @@ Depends on A1-A5. Fix failures before moving on.
 - [ ] Use `shopify app webhook trigger` to check signed synthetic delivery. Prove replay separately with the **same body and same `X-Shopify-Webhook-Id`**; do not assume two CLI invocations reuse the ID.
 - [ ] Check invalid HMAC, malformed payload, unknown shop, zero orders, and more than 20 orders. Aggregates must include all orders, while the table contains only 20.
 - [ ] Check storage failure/retry behavior, uninstall cleanup, repeat uninstall, and late delivery after uninstall.
-- [ ] Run the scaffold's available type, lint, build, and test checks. Record actual commands and results in the README; inspect staged files for secrets.
+- [ ] Run the scaffold's available type, lint, build, and test checks. Record actual commands and results in this plan; keep the README's run/check instructions current and inspect staged files for secrets.
 
 **Done when:** required cases pass, there is at least one meaningful automated test, and the end-to-end demo works. The specific fixed-signature HMAC bonus remains B1.
 
@@ -123,13 +126,14 @@ Depends on A1-A5. Fix failures before moving on.
 
 Depends on A6.
 
-- [ ] Update `README.MD` with verified installation/run/test commands, environment variable names without values, the COD rule, key decisions, actual time, omissions, and future improvements.
+- [ ] Finalize `README.MD` using only the PDF's six requested topics: how to run, the COD rule, key decisions, actual time spent, improvements with more time, and conscious omissions. Include verified installation/run/test commands and needed environment variable names under how to run; keep internal progress and verification logs in this plan.
 - [ ] Check that a reviewer can understand how to start the app within two minutes. Replace planned statements with observed implementation details.
 - [ ] Keep coherent milestone commits, review the final changes, and prepare the Git repository link for submission.
 - [ ] Rehearse a 15-minute walkthrough: 2 minutes for context/setup, 5 for a live order and duplicate replay, 5 for the handler/model/security, and 3 for tradeoffs and scaling to 10,000 merchants.
 - [ ] Prepare for approximately 10 minutes of Q&A: raw-body verification, atomic deduplication, shop isolation, uninstall, money handling, and scaling limits.
+- [ ] When all A7 work is complete, fill in the README's Finished time and Total elapsed time next to Started. Use the actual completion date/time in Asia/Jerusalem and calculate the duration from **2026-09-22 08:30**, expressed in hours and minutes. Keep both fields empty until then.
 
-**Done when:** every required deliverable is ready, no undocumented required feature is missing, and the local demo runs with `shopify app dev`.
+**Done when:** every required deliverable is ready, no undocumented required feature is missing, the local demo runs with `shopify app dev`, and the README shows the actual start, finish, and total elapsed time together.
 
 ## B - Important, only after all A tasks are complete
 
