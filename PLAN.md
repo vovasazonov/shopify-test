@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A2 is complete locally. A1 now has Vladimir's own Partner organization, dev store, and linked app; installation is waiting for the protected customer data declaration required for order webhooks.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 setup and installation are complete, and A2 is complete locally. A3 webhook processing is next.
 
 ## Priorities and working rules
 
@@ -38,21 +38,21 @@ Use the budget as a limit, not a reason to rush correctness. If setup or impleme
 
 ### A1 - Set up Shopify and install the starter app
 
-**Progress:** Vladimir created the `test-assignment` Partner organization. Created the free Basic dev store `cod-order-watch-dev.myshopify.com` with no demo data, activated Cash on Delivery, and created/linked **COD Order Watch** using the existing repository. The `read_orders` scope, `2025-10` webhook API version, and all three webhook declarations were preserved. `shopify app dev` started Prisma, the local server, and the tunnel, but Shopify rejected the preview because the app is not yet approved for order webhooks containing protected customer data. The Partner Dashboard allows the development data-use declaration without selecting distribution; no distribution method has been selected. Saving the proposed Analytics reason was blocked by automatic approval review and requires user authorization. Customer name, email, phone, and address fields remain unselected. Installation, granted-scope verification, and live webhook configuration remain pending. The development server stopped after the preview failure.
+**Complete:** Vladimir created the `test-assignment` Partner organization. Created the free Basic dev store `cod-order-watch-dev.myshopify.com`, activated Cash on Delivery, and created/linked **COD Order Watch** using the existing repository. With Vladimir's explicit approval, saved Analytics as the protected customer data use for development; customer name, email, phone, and address fields remain unselected. No distribution method or App Store review submission was needed. `shopify app dev` now starts successfully, and the installed app's authenticated setup page opens inside Shopify. A direct Admin API query confirms `read_orders` is the only granted scope, also reflected in the persisted offline session. The accepted development bundle includes `orders/create`, `app/uninstalled`, and `app/scopes_update` at API version `2025-10`, pointing to the current tunnel. Webhook delivery and business behavior still belong to A3/A6. The local development server was left running after verification.
 
 - [x] Create Vladimir's own Partner organization and a **Dev** store for app testing, using `npm run shopify -- store create dev` or the Dev Dashboard; enable the manual Cash on Delivery payment method.
 - [x] Use TypeScript and the Shopify CLI React Router template with Prisma/SQLite. Tested locally with Node 26.5.0 and Shopify CLI 4.8.0; the project requires Node 22.12+.
-- [ ] Create/link **COD Order Watch** with `npm run config:link` and run `npm run dev`. The official starter is already in this repository; do not repeat `app init` over the existing app. Linking can overwrite `shopify.app.toml`, so preserve/reapply `read_orders` and the webhook declarations before starting development.
-- [ ] Install the app on the dev store and open its embedded page.
-- [ ] Request the minimum necessary `read_orders` scope, resolve any required protected customer data access setup, and confirm the installed app has the scope.
-- [ ] Declare `orders/create` and `app/uninstalled` in `shopify.app.toml` under `[[webhooks.subscriptions]]`, using relative handler URLs and the template's supported API version. Confirm the dev configuration is applied.
+- [x] Create/link **COD Order Watch** with `npm run config:link` and run `npm run dev`. The official starter is already in this repository; do not repeat `app init` over the existing app. Linking can overwrite `shopify.app.toml`, so preserve/reapply `read_orders` and the webhook declarations before starting development.
+- [x] Install the app on the dev store and open its embedded page.
+- [x] Request the minimum necessary `read_orders` scope, resolve any required protected customer data access setup, and confirm the installed app has the scope.
+- [x] Declare `orders/create` and `app/uninstalled` in `shopify.app.toml` under `[[webhooks.subscriptions]]`, using relative handler URLs and the template's supported API version. Confirm the dev configuration is applied.
 - [x] Add `.env` and other local secrets, database files, and generated artifacts to `.gitignore` before committing app files. Preserve the task PDF exclusion and commit the dependency lockfile.
 
 **Done when:** the app opens inside the dev store, local development works, and subscription/scopes configuration is in place. No hosting deployment is required.
 
 ### A2 - Define shop-scoped storage and the COD rule
 
-Uses the local starter from A1. Proceeding locally while Partner setup is pending was approved; A1 still needs to finish before live Shopify verification.
+Uses the starter from A1. Implemented locally while Partner setup was pending; A1 installation is now verified.
 
 **Complete locally:** migrations work on both the existing development database and a fresh temporary database. Sixteen automated tests cover COD examples, exact amounts, currency separation, shop isolation, both unique keys, duplicate deliveries/orders, unknown shops, invalid storage input, and rollback followed by retry. The order service is ready for A3; the live webhook route still returns 503 after authentication.
 

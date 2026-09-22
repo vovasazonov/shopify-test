@@ -2,7 +2,7 @@
 
 An embedded Shopify app being built to watch incoming orders and show merchants how many are Cash-On-Delivery (COD).
 
-**Status: A2 complete locally; A1 installation pending.** The starter comes from Shopify's official React Router template (source commit `e548c95`). Shop-scoped order storage, atomic delivery receipts, COD classification, and exact currency totals are implemented and tested. The `test-assignment` Partner organization and free `cod-order-watch-dev.myshopify.com` dev store now exist; Cash on Delivery is active and **COD Order Watch** is linked to this repository. Shopify blocked the development preview until the app's protected customer data declaration is saved. Installation and granted-scope verification remain pending. The webhook HTTP handler and dashboard still need implementation. See [PLAN.md](PLAN.md) for the prioritized implementation checklist: complete A first, then B if time permits; C can be skipped.
+**Status: A1 setup verified; A2 complete locally.** The starter comes from Shopify's official React Router template (source commit `e548c95`). Shop-scoped order storage, atomic delivery receipts, COD classification, and exact currency totals are implemented and tested. **COD Order Watch** opens inside the free `cod-order-watch-dev.myshopify.com` dev store in the `test-assignment` organization. Cash on Delivery is active, development data access is configured, and the installed app has only `read_orders`. The webhook HTTP handler and dashboard still need implementation. See [PLAN.md](PLAN.md) for the prioritized implementation checklist: complete A first, then B if time permits; C can be skipped.
 
 ## Task and expected behavior
 
@@ -36,15 +36,23 @@ npm run lint
 npm run build
 ```
 
-The remaining Shopify workflow uses Vladimir's own Partner organization and has **not yet been verified end to end**:
+Shopify setup is verified with Vladimir's own Partner organization. To start this linked app again:
+
+```sh
+RUST_LOG=info npm run dev -- --store cod-order-watch-dev.myshopify.com
+```
+
+Open the preview URL printed by the CLI (or press `p` in an interactive terminal). The installed app is available at [COD Order Watch in Shopify admin](https://admin.shopify.com/store/cod-order-watch-dev/apps/cod-order-watch/app) while the development server and tunnel are running. The server was left running after A1 verification. The current page is a setup placeholder; the full order workflow is not implemented yet.
+
+Setup record and steps for another environment:
 
 1. **Done:** Vladimir created the `test-assignment` Partner organization (organization ID `236923583`) using the same Shopify account as the CLI.
 2. **Done:** created `cod-order-watch-dev.myshopify.com` as a free Basic **Dev** store, without demo data. For another environment, use `npm run shopify -- store create dev` or **Dev Dashboard > Stores > Create store > Dev**.
 3. **Done:** created/linked **COD Order Watch** using `npm run config:link`. The linked `shopify.app.toml` preserves `read_orders`, webhook API version `2025-10`, and all three webhook declarations. Its client ID is public configuration, not a secret. Reuse this starter and A2 implementation; do not run `shopify app init` again. Linking another app can overwrite configuration, so review the diff afterward.
 4. **Done:** activated **Cash on Delivery (COD)** under **Settings > Payments > Manual payment methods**.
-5. **Pending:** save the development data-use declaration in **Partner Dashboard > Apps > COD Order Watch > API access requests > Protected customer data access**. The UI permits this without selecting a distribution method. Analytics was proposed for the order/COD dashboard; automatic approval review blocked saving that permission-related declaration pending explicit user authorization. Customer names, addresses, email addresses, and phone numbers remain unselected. No App Store review submission or distribution selection has been made.
-6. After that declaration is saved, run `RUST_LOG=info npm run dev -- --store cod-order-watch-dev.myshopify.com`, then press `p` to open the preview, install the app, and open its embedded page. The first attempt started the local server but exited when Shopify rejected the preview's protected-data webhook subscriptions; no dev server is currently running.
-7. Verify the installed app's granted scopes and applied webhook subscriptions.
+5. **Done:** saved **Analytics** as the development data-use reason in **Partner Dashboard > Apps > COD Order Watch > API access requests > Protected customer data access**, with Vladimir's explicit approval. Customer names, addresses, email addresses, and phone numbers remain unselected. The current UI allowed this without a distribution choice or App Store review submission.
+6. **Done:** started the development server, opened its preview URL, and verified the authenticated embedded setup page. The initial protected-data rejection was resolved by step 5.
+7. **Done:** a read-only Admin API query of `currentAppInstallation.accessScopes` returned only `read_orders`; the persisted offline session agrees. The development bundle accepted by Shopify includes all three declared webhook topics with API version `2025-10` and URLs for the active tunnel. Actual order delivery and processing remain A3/A6.
 
 Node 26.5.0, Git 2.50.1, and Shopify CLI 4.8.0 were rechecked locally for this setup. The installed project CLI supports `store create dev`; no global CLI installation is needed to use the commands above.
 
@@ -113,11 +121,15 @@ Local checks on 2026-09-22 (rerun for A2 where applicable):
 | `shopify store create dev --name cod-order-watch-dev --organization-id 236923583 --plan basic --no-demo-data --json` | Passed; created the free dev store. |
 | `npm run config:link` | Passed; created/linked COD Order Watch; restored the required scope and webhook API version afterward. |
 | `shopify app config validate` | Passed for the linked `shopify.app.toml`. |
-| `RUST_LOG=info shopify app dev --store cod-order-watch-dev.myshopify.com` | Local server started; Shopify rejected the preview because protected customer data access is not yet configured. Installation not reached. |
+| `RUST_LOG=info shopify app dev --store cod-order-watch-dev.myshopify.com --no-color` | Passed after saving the approved data-use declaration; CLI reported Ready and the embedded setup page opened. |
+| Admin API `currentAppInstallation { accessScopes { handle } }` | HTTP 200; only `read_orders` granted. Persisted offline session also has `read_orders`. |
+| Accepted development bundle | Contains `orders/create`, `app/uninstalled`, and `app/scopes_update` at API version `2025-10`, targeting the current tunnel. Delivery remains untested. |
 
 The agent environment injects `RUST_LOG=warn`, which causes Prisma's schema engine to fail on a fresh SQLite database with an empty error. Fresh-database checks succeeded with `RUST_LOG` unset or set to `info`, matching [Prisma issue #29355](https://github.com/prisma/prisma/issues/29355). If this occurs, run `RUST_LOG=info npm run setup`. No database or schema workaround was needed.
 
-Automated coverage includes COD rules, exact decimal/currency handling, shop isolation, database uniqueness, delivery/order replay, absent installations, invalid storage input, and an actual SQLite trigger failure proving transactional rollback and successful retry. A6 still needs HTTP/HMAC integration and real Shopify order verification, dashboard limits/empty state, uninstall, and the remaining end-to-end cases. Live Shopify setup has been checked through store creation, COD activation, app linking, and the preview rejection; no installed-app or live order checks have passed. Docker deployment has not been tested.
+Automated coverage includes COD rules, exact decimal/currency handling, shop isolation, database uniqueness, delivery/order replay, absent installations, invalid storage input, and an actual SQLite trigger failure proving transactional rollback and successful retry. A6 still needs HTTP/HMAC integration and real Shopify order verification, dashboard limits/empty state, uninstall, and the remaining end-to-end cases. Live Shopify setup, the authenticated embedded page, and installed scopes are verified. No live order processing or Docker deployment tests have run.
+
+The Admin API `webhookSubscriptions` query returned an empty list, which is expected for this configuration: it returns shop-scoped subscriptions, not the app-scoped subscriptions declared in TOML. The accepted development bundle was checked instead. See [Shopify's query reference](https://shopify.dev/docs/api/admin-graphql/2025-10/queries/webhooksubscriptions).
 
 Dependency audit: npm currently reports 19 high-severity dependency entries rooted in unchanged starter tooling dependencies (`lodash`, `minimatch`, and `deepmerge-ts`). The A2 additions (`big.js`, `@types/big.js`, and `tsx`) were not flagged. Dependency remediation remains pending; no forced upgrades or incompatible Prisma downgrades were applied during A2. This audit does not establish whether an advisory is reachable through the app's request handlers.
 
@@ -134,13 +146,14 @@ Elapsed time is measured for the current work session, including account setup a
 | Brief review and planning | Not recorded | Planning documents created |
 | Shopify account, store, and scaffold | 10 | Initial local preparation and checks |
 | A1 setup clarification and prerequisite recheck | 3 | Updated workflow from Muhamed's reply and opened Partner signup |
-| A1 dev store, app linking, and access diagnosis | 6 | Created dev store, enabled COD, linked app; preview waits for data-use authorization |
+| A1 dev store, app linking, and access diagnosis | 6 | Created dev store, enabled COD, linked app; identified required data declaration |
+| A1 approved access and installation verification | 3 | Saved approved declaration; verified embedded app, scope, and development bundle |
 | Data model and local tests | 9 | A2 complete locally; webhook integration remains A3 |
 | Dashboard and uninstall | Not started | Pending |
 | Tests and fixes | Not started | Pending |
 | Final README and demo rehearsal | Not started | Pending |
 | Optional bonus / additional tests | Not started | Pending |
-| **Recorded subtotal** | **28** | Earlier planning and user-led organization signup time still need to be added |
+| **Recorded subtotal** | **31** | Earlier planning and user-led organization signup time still need to be added |
 
 ## Scope choices and more time
 
