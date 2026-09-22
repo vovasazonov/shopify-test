@@ -78,6 +78,8 @@ export async function saveReceivedOrder(
     return await client.$transaction(async (tx): Promise<SaveOrderResult> => {
       // An expired access token still represents an installation. Only uninstall
       // removes the offline session; do not recreate it from an order delivery.
+      // This check must stay inside the transaction: deleteShopData commits all
+      // uninstall deletions together, so a concurrent order cannot restore them.
       const installation = await tx.session.findFirst({
         where: { shop, isOnline: false },
         select: { id: true },

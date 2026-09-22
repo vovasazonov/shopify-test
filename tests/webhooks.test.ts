@@ -46,6 +46,10 @@ const originalEnvironment = new Map(
 let temporaryDirectory: string;
 let client: PrismaClient;
 let action: typeof import("../app/routes/webhooks.orders.create").action;
+let uninstallAction: typeof import("../app/routes/webhooks.app.uninstalled").action;
+let deleteShopData: typeof import("../app/services/uninstall.server").deleteShopData;
+let saveReceivedOrder: typeof import("../app/services/orders.server").saveReceivedOrder;
+let secondClient: PrismaClient;
 let resetSdkFetch: (() => void) | undefined;
 let networkCalls = 0;
 let logs: unknown[][] = [];
@@ -84,6 +88,11 @@ before(async () => {
       .href,
   });
   await client.$connect();
+  secondClient = new PrismaClient({
+    datasourceUrl: pathToFileURL(path.join(temporaryDirectory, "dev.sqlite"))
+      .href,
+  });
+  await secondClient.$connect();
 
   process.env.SHOPIFY_API_KEY = "webhook-test-api-key";
   process.env.SHOPIFY_API_SECRET = secret;
@@ -99,6 +108,10 @@ before(async () => {
   };
   global.fetch = blockNetwork;
   ({ action } = await import("../app/routes/webhooks.orders.create"));
+  ({ action: uninstallAction } =
+    await import("../app/routes/webhooks.app.uninstalled"));
+  ({ deleteShopData } = await import("../app/services/uninstall.server"));
+  ({ saveReceivedOrder } = await import("../app/services/orders.server"));
   const runtime = await import("@shopify/shopify-api/runtime");
   runtime.setAbstractFetchFunc(blockNetwork);
   resetSdkFetch = () => runtime.setAbstractFetchFunc(originalFetch);
@@ -137,6 +150,7 @@ after(async () => {
     else process.env[key] = value;
   }
   if (client) await client.$disconnect();
+  if (secondClient) await secondClient.$disconnect();
   if (temporaryDirectory) {
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
@@ -162,26 +176,29 @@ function signedRequest(
     if (value === null) requestHeaders.delete(name);
     else requestHeaders.set(name, value);
   }
-  return new Request("https://webhook-test.example.test/webhooks/orders/create", {
-    method: "POST",
-    headers: requestHeaders,
-    body: rawBody,
-  });
+  return new Request(
+    "https://webhook-test.example.test/webhooks/orders/create",
+    {
+      method: "POST",
+      headers: requestHeaders,
+      body: rawBody,
+    },
+  );
 }
 
 function actionArgs(request: Request): ActionFunctionArgs {
   return {
     request,
     url: new URL(request.url),
-    pattern: "/webhooks/orders/create",
+    pattern: new URL(request.url).pathname,
     params: {},
     context: {},
   };
 }
 
-async function deliver(request: Request): Promise<Response> {
+async function deliver(request: Request, handler = action): Promise<Response> {
   try {
-    return await action(actionArgs(request));
+    return await handler(actionArgs(request));
   } catch (error) {
     // React Router converts thrown Responses to HTTP responses at its boundary.
     if (error instanceof Response) return error;
@@ -220,22 +237,29 @@ test("signed route delivery persists only required fields and replay never doubl
   assert.equal((await deliver(signedRequest())).status, 200);
   assert.equal(await client.webhookReceipt.count(), 1);
   assert.equal(
-    (await deliver(signedRequest(body, { "X-Shopify-Webhook-Id": "delivery-2" })))
-      .status,
+    (
+      await deliver(
+        signedRequest(body, { "X-Shopify-Webhook-Id": "delivery-2" }),
+      )
+    ).status,
     200,
   );
   assert.equal(await client.order.count(), 1);
   assert.equal(await client.webhookReceipt.count(), 2);
   assert.deepEqual(await client.order.findFirst(), firstOrder);
   assert.equal(await client.order.count({ where: { shop: shopB } }), 0);
-  assert.deepEqual(routeEntries().map((entry) => entry.outcome), [
-    "created", "duplicate_delivery", "duplicate_order",
-  ]);
+  assert.deepEqual(
+    routeEntries().map((entry) => entry.outcome),
+    ["created", "duplicate_delivery", "duplicate_order"],
+  );
   assert.equal(networkCalls, 0);
 });
 
 test("signature failures and missing delivery headers stay rejected without writes", async () => {
-  const cases: Array<{ headers: Record<string, string | null>; status: number }> = [
+  const cases: Array<{
+    headers: Record<string, string | null>;
+    status: number;
+  }> = [
     { headers: { "X-Shopify-Hmac-Sha256": "invalid-signature" }, status: 401 },
     { headers: { "X-Shopify-Hmac-Sha256": null }, status: 400 },
     { headers: { "X-Shopify-Webhook-Id": null }, status: 400 },
@@ -257,7 +281,10 @@ test("signed malformed JSON and invalid field shapes return 400 without writes",
   const malformedBodies = [
     `{"customer":"${customerMarker}"`,
     JSON.stringify({ ...orderPayload, total_price: 123.45 }),
-    JSON.stringify({ ...orderPayload, payment_gateway_names: [customerMarker, 7] }),
+    JSON.stringify({
+      ...orderPayload,
+      payment_gateway_names: [customerMarker, 7],
+    }),
     JSON.stringify([orderPayload]),
     "null",
   ];
@@ -276,9 +303,11 @@ test("signed malformed JSON and invalid field shapes return 400 without writes",
 
 test("verified unknown shops are acknowledged without creating an installation or order", async () => {
   const unknownShop = "unknown-webhook-test.myshopify.com";
-  const response = await deliver(signedRequest(body, {
-    "X-Shopify-Shop-Domain": unknownShop,
-  }));
+  const response = await deliver(
+    signedRequest(body, {
+      "X-Shopify-Shop-Domain": unknownShop,
+    }),
+  );
   assert.equal(response.status, 200);
   await assertNoOrderData();
   assert.equal(await client.session.count({ where: { shop: unknownShop } }), 0);
@@ -310,7 +339,9 @@ test("expired offline tokens cause no external requests or refresh writes and lo
   assert.equal((await deliver(signedRequest())).status, 200);
   assert.equal(networkCalls, 0);
   assert.deepEqual(
-    await client.session.findUniqueOrThrow({ where: { id: `offline_${shopA}` } }),
+    await client.session.findUniqueOrThrow({
+      where: { id: `offline_${shopA}` },
+    }),
     sessionBefore,
   );
   const [entry] = routeEntries();
@@ -321,7 +352,13 @@ test("expired offline tokens cause no external requests or refresh writes and lo
   assert.equal(entry.outcome, "created");
   assert.equal(typeof entry.durationMs, "number");
   const serializedLogs = JSON.stringify(logs);
-  for (const sensitive of [customerMarker, secret, accessToken, refreshToken, body]) {
+  for (const sensitive of [
+    customerMarker,
+    secret,
+    accessToken,
+    refreshToken,
+    body,
+  ]) {
     assert.equal(serializedLogs.includes(sensitive), false);
   }
 });
@@ -344,8 +381,306 @@ test("records local route acknowledgement latency for 20 committed deliveries", 
   durations.sort((left, right) => left - right);
   context.diagnostic(
     `Local route action only, 20 writes (excludes tunnel/HTTP transport): ` +
-    `min=${durations[0].toFixed(2)} ms, ` +
-    `p95=${durations[Math.ceil(durations.length * 0.95) - 1].toFixed(2)} ms, ` +
-    `max=${durations[durations.length - 1].toFixed(2)} ms`,
+      `min=${durations[0].toFixed(2)} ms, ` +
+      `p95=${durations[Math.ceil(durations.length * 0.95) - 1].toFixed(2)} ms, ` +
+      `max=${durations[durations.length - 1].toFixed(2)} ms`,
   );
+});
+
+function uninstallRequest(
+  headers: Record<string, string | null> = {},
+  rawBody = JSON.stringify({ id: 123, myshopify_domain: shopB }),
+): Request {
+  // A mismatched payload domain must never override the authenticated shop.
+  return new Request(
+    "https://webhook-test.example.test/webhooks/app/uninstalled",
+    signedRequest(rawBody, {
+      "X-Shopify-Topic": "app/uninstalled",
+      "X-Shopify-Webhook-Id": "uninstall-1",
+      ...headers,
+    }),
+  );
+}
+
+async function shopSnapshot(shop: string) {
+  return {
+    sessions: await client.session.findMany({
+      where: { shop },
+      orderBy: { id: "asc" },
+    }),
+    orders: await client.order.findMany({
+      where: { shop },
+      orderBy: { orderId: "asc" },
+    }),
+    receipts: await client.webhookReceipt.findMany({
+      where: { shop },
+      orderBy: { webhookId: "asc" },
+    }),
+  };
+}
+
+async function seedBothShops() {
+  for (const shop of [shopA, shopB]) {
+    assert.equal(
+      (await deliver(signedRequest(body, { "X-Shopify-Shop-Domain": shop })))
+        .status,
+      200,
+    );
+    await client.session.create({
+      data: {
+        id: `online_${shop}`,
+        shop,
+        isOnline: true,
+        state: "test",
+        accessToken,
+      },
+    });
+  }
+}
+
+const emptyShop = { sessions: [], orders: [], receipts: [] };
+
+test("uninstall deletes all shop records atomically, preserves another shop, and tolerates repeats", async () => {
+  await seedBothShops();
+  const otherShopBefore = await shopSnapshot(shopB);
+  assert.equal(
+    (await deliver(uninstallRequest(), uninstallAction)).status,
+    200,
+  );
+  assert.deepEqual(await shopSnapshot(shopA), emptyShop);
+  assert.deepEqual(await shopSnapshot(shopB), otherShopBefore);
+  for (const webhookId of ["uninstall-1", "uninstall-2"]) {
+    assert.equal(
+      (
+        await deliver(
+          uninstallRequest({ "X-Shopify-Webhook-Id": webhookId }),
+          uninstallAction,
+        )
+      ).status,
+      200,
+    );
+    assert.deepEqual(await shopSnapshot(shopA), emptyShop);
+  }
+  const [, entry] = logs.find(([message]) => message === "Uninstall webhook")!;
+  assert.deepEqual(entry, {
+    shop: shopA,
+    topic: "APP_UNINSTALLED",
+    webhookId: "uninstall-1",
+    verified: true,
+    outcome: "cleaned_up",
+    status: 200,
+    sessionsDeleted: 2,
+    ordersDeleted: 1,
+    receiptsDeleted: 1,
+    durationMs: (entry as { durationMs: number }).durationMs,
+  });
+  assert.equal(networkCalls, 0);
+});
+
+test("uninstall verifies HMAC and removes leftover records when no session remains", async () => {
+  await seedBothShops();
+  await client.session.deleteMany({ where: { shop: shopA } });
+  const leftoverData = await shopSnapshot(shopA);
+  const otherShopBefore = await shopSnapshot(shopB);
+  assert.equal(
+    (
+      await deliver(
+        uninstallRequest({ "X-Shopify-Hmac-Sha256": "bad" }),
+        uninstallAction,
+      )
+    ).status,
+    401,
+  );
+  assert.deepEqual(await shopSnapshot(shopA), leftoverData);
+  assert.equal(
+    (await deliver(uninstallRequest(), uninstallAction)).status,
+    200,
+  );
+  assert.deepEqual(await shopSnapshot(shopA), emptyShop);
+  assert.deepEqual(await shopSnapshot(shopB), otherShopBefore);
+  assert.equal(networkCalls, 0);
+});
+
+test("invalid uninstall signatures, headers, JSON, and topics never delete data", async () => {
+  await seedBothShops();
+  const before = await Promise.all([shopSnapshot(shopA), shopSnapshot(shopB)]);
+  const requests: Array<[Request, number]> = [
+    [uninstallRequest({ "X-Shopify-Hmac-Sha256": "bad" }), 401],
+    [uninstallRequest({ "X-Shopify-Hmac-Sha256": null }), 400],
+    [uninstallRequest({ "X-Shopify-Webhook-Id": null }), 400],
+    [uninstallRequest({ "X-Shopify-Topic": "orders/create" }), 400],
+    [uninstallRequest({}, `{"private":"${customerMarker}"`), 400],
+  ];
+  for (const [request, status] of requests) {
+    assert.equal((await deliver(request, uninstallAction)).status, status);
+    assert.deepEqual(
+      await Promise.all([shopSnapshot(shopA), shopSnapshot(shopB)]),
+      before,
+    );
+  }
+  await assert.rejects(
+    uninstallAction(
+      actionArgs(uninstallRequest({ "X-Shopify-Hmac-Sha256": "bad" })),
+    ),
+    (error: unknown) => error instanceof Response && error.status === 401,
+  );
+  for (const sensitive of [customerMarker, secret, accessToken, refreshToken]) {
+    assert.equal(JSON.stringify(logs).includes(sensitive), false);
+  }
+  assert.equal(networkCalls, 0);
+});
+
+test("a failed final cleanup delete rolls back sessions and orders so the uninstall can retry", async () => {
+  await seedBothShops();
+  const before = await Promise.all([shopSnapshot(shopA), shopSnapshot(shopB)]);
+  await client.$executeRawUnsafe(`CREATE TRIGGER fail_cleanup BEFORE DELETE ON "WebhookReceipt"
+    BEGIN SELECT RAISE(ABORT, 'simulated cleanup failure'); END`);
+  try {
+    assert.equal(
+      (await deliver(uninstallRequest(), uninstallAction)).status,
+      503,
+    );
+    assert.deepEqual(
+      await Promise.all([shopSnapshot(shopA), shopSnapshot(shopB)]),
+      before,
+    );
+  } finally {
+    await client.$executeRawUnsafe("DROP TRIGGER fail_cleanup");
+  }
+  assert.equal(
+    (await deliver(uninstallRequest(), uninstallAction)).status,
+    200,
+  );
+  assert.deepEqual(await shopSnapshot(shopA), emptyShop);
+  assert.deepEqual(await shopSnapshot(shopB), before[1]);
+});
+
+test("late order deliveries cannot restore orders or receipts after uninstall", async () => {
+  await seedBothShops();
+  assert.equal(
+    (await deliver(uninstallRequest(), uninstallAction)).status,
+    200,
+  );
+  for (const webhookId of ["delivery-1", "late-delivery"]) {
+    assert.equal(
+      (
+        await deliver(
+          signedRequest(body, { "X-Shopify-Webhook-Id": webhookId }),
+        )
+      ).status,
+      200,
+    );
+    assert.deepEqual(await shopSnapshot(shopA), emptyShop);
+    assert.equal(routeEntries().at(-1)?.outcome, "uninstalled");
+  }
+  assert.equal(networkCalls, 0);
+});
+
+function gate() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+const racingOrder = {
+  orderId: "991",
+  name: "#race",
+  total: "5.00",
+  currency: "USD",
+  createdAt: new Date("2026-09-22T06:00:00Z"),
+  gatewayNames: ["cash"],
+};
+
+// Gates pause inside actual transactions, after the installation read or the
+// first uninstall deletion. A separate Prisma connection starts the competing
+// operation before the first transaction is allowed to finish.
+for (const first of ["order", "uninstall"] as const) {
+  test(
+    `concurrent ${first}-first transactions leave no uninstalled-shop data`,
+    { timeout: 10000 },
+    async () => {
+      const paused = gate();
+      const resume = gate();
+      await saveReceivedOrder(shopB, "other-shop", racingOrder, client);
+      const otherShopBefore = await shopSnapshot(shopB);
+      const heldClient = client.$extends({
+        query: {
+          session: {
+            async findFirst({ args, query }) {
+              const result = await query(args);
+              if (first === "order") {
+                paused.resolve();
+                await resume.promise;
+              }
+              return result;
+            },
+            async deleteMany({ args, query }) {
+              const result = await query(args);
+              if (first === "uninstall") {
+                paused.resolve();
+                await resume.promise;
+              }
+              return result;
+            },
+          },
+        },
+      });
+      // The extension preserves these model/transaction APIs; Prisma omits event
+      // methods from its extended static type, which the services never use.
+      const held = heldClient as unknown as PrismaClient;
+      const firstResult =
+        first === "order"
+          ? saveReceivedOrder(shopA, "racing-delivery", racingOrder, held)
+          : deleteShopData(shopA, held);
+      let results;
+      try {
+        await Promise.race([
+          paused.promise,
+          firstResult.then(() => {
+            throw new Error("Transaction did not pause");
+          }),
+        ]);
+        const secondResult =
+          first === "order"
+            ? deleteShopData(shopA, secondClient)
+            : saveReceivedOrder(
+                shopA,
+                "racing-delivery",
+                racingOrder,
+                secondClient,
+              );
+        const completed = Promise.all([firstResult, secondResult]);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        resume.resolve();
+        results = await completed;
+      } finally {
+        resume.resolve();
+        await firstResult;
+      }
+      assert.equal(
+        first === "order" ? results[0] : results[1],
+        first === "order" ? "created" : "uninstalled",
+      );
+      assert.deepEqual(await shopSnapshot(shopA), emptyShop);
+      assert.deepEqual(await shopSnapshot(shopB), otherShopBefore);
+      assert.equal(
+        await saveReceivedOrder(
+          shopA,
+          "retry-after-race",
+          racingOrder,
+          secondClient,
+        ),
+        "uninstalled",
+      );
+      assert.deepEqual(await shopSnapshot(shopA), emptyShop);
+    },
+  );
+}
+
+test("cleanup refuses empty shop keys", async () => {
+  for (const shop of ["", " ", ` ${shopA}`])
+    await assert.rejects(deleteShopData(shop, client), TypeError);
+  assert.equal(await client.session.count(), 2);
 });

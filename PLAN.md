@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 setup and installation are complete; A2 storage, A3 webhook processing, and A4 dashboard are implemented and verified locally. The dashboard also opens inside Shopify. A5 uninstall cleanup is next. Real Shopify order delivery remains A6.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 setup and installation are complete; A2 storage, A3 webhook processing, A4 dashboard, and A5 uninstall cleanup are implemented and verified locally. The dashboard also opens inside Shopify. A6 required verification is next, including real Shopify order delivery and uninstall/reinstall checks.
 
 ## Priorities and working rules
 
@@ -106,10 +106,16 @@ Depends on A2 and A3.
 
 Depends on A2 and A3.
 
-- [ ] Authenticate `app/uninstalled` with HMAC, even when no active session remains.
-- [ ] Delete that shop's orders, webhook receipts, and sessions in a transaction. Include any other shop-owned records introduced during implementation.
-- [ ] Make repeat uninstall notifications harmless and return HTTP 200 after cleanup succeeds.
-- [ ] Ensure later order deliveries cannot recreate data while the shop is uninstalled, including the order/uninstall concurrency boundary.
+**Complete locally:** the uninstall route verifies the untouched request with Shopify's authenticator, rejects the wrong topic, and cleans up the authenticated shop even if no session remains. `deleteShopData` deletes every online/offline session, order, and webhook receipt for that shop in one transaction. It acknowledges only after commit; repeats are harmless, and cleanup failures return 503 for retry. Logs include shop, topic, delivery ID, outcome, and deletion counts without payloads or secrets.
+
+Order processing checks installation inside its transaction. With [SQLite's transaction isolation](https://www.sqlite.org/isolation.html), an order that commits first is removed by cleanup; an order that proceeds after cleanup sees no installation and writes nothing. Storage conflicts propagate for retry. No in-memory lock or extra installation record is required for this SQLite implementation; re-evaluate locking when moving to another database.
+
+**Verification on 2026-09-22:** `npm test` passed 48 tests; typecheck, lint, build, and diff checks passed. The shared real-SDK route suite is now `tests/webhooks.test.ts`. Eight new cases cover deletion of all shop-owned records while preserving a second shop, repeated uninstalls, HMAC enforcement without sessions, invalid signatures/headers/JSON/topics, rollback after failure of the final delete, late order replays, both order-first and uninstall-first transaction races, and empty-shop-key rejection. Race tests pause inside actual transactions and start the competing operation through a separate Prisma connection to the same temporary database. All tests use disposable databases and fake credentials. The installed development store was not uninstalled; real uninstall/reinstall verification remains A6.
+
+- [x] Authenticate `app/uninstalled` with HMAC, even when no active session remains.
+- [x] Delete that shop's orders, webhook receipts, and sessions in a transaction. Include any other shop-owned records introduced during implementation.
+- [x] Make repeat uninstall notifications harmless and return HTTP 200 after cleanup succeeds.
+- [x] Ensure later order deliveries cannot recreate data while the shop is uninstalled, including the order/uninstall concurrency boundary.
 
 **Done when:** uninstall removes the targeted shop's data, leaves another shop untouched, and repeated uninstall or late order deliveries do not restore deleted data.
 
