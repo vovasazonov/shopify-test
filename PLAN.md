@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 setup and installation are complete; A2 storage, A3 webhook processing, A4 dashboard, and A5 uninstall cleanup are implemented and verified locally. The dashboard also opens inside Shopify. A6 required verification is next, including real Shopify order delivery and uninstall/reinstall checks.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1-A5 are complete. A6 has verified real Shopify order delivery, dashboard figures, signed replay/rejection, and all automated checks; the live uninstall/reinstall check is awaiting confirmation. A7 documentation and presentation remain next.
 
 ## Priorities and working rules
 
@@ -123,14 +123,24 @@ Order processing checks installation inside its transaction. With [SQLite's tran
 
 Depends on A1-A5. Fix failures before moving on.
 
-- [ ] Add meaningful automated coverage for COD classification and database-backed duplicate handling. Include two shop fixtures to check isolation; use a temporary test database.
-- [ ] Create a real COD order in the development store, refresh the dashboard, and compare the row, counts, percentage, and amount. Also verify a non-COD order.
-- [ ] Use `shopify app webhook trigger` to check signed synthetic delivery. Prove replay separately with the **same body and same `X-Shopify-Webhook-Id`**; do not assume two CLI invocations reuse the ID.
-- [ ] Check invalid HMAC, malformed payload, unknown shop, zero orders, and more than 20 orders. Aggregates must include all orders, while the table contains only 20.
+- [x] Add meaningful automated coverage for COD classification and database-backed duplicate handling. Include two shop fixtures to check isolation; use a temporary test database.
+- [x] Create a real COD order in the development store, refresh the dashboard, and compare the row, counts, percentage, and amount. Also verify a non-COD order.
+- [x] Use `shopify app webhook trigger` to check signed synthetic delivery. Prove replay separately with the **same body and same `X-Shopify-Webhook-Id`**; do not assume two CLI invocations reuse the ID.
+- [x] Check invalid HMAC, malformed payload, unknown shop, zero orders, and more than 20 orders. Aggregates must include all orders, while the table contains only 20.
 - [ ] Check storage failure/retry behavior, uninstall cleanup, repeat uninstall, and late delivery after uninstall.
-- [ ] Run the scaffold's available type, lint, build, and test checks. Record actual commands and results in this plan; keep the README's run/check instructions current and inspect staged files for secrets.
+- [x] Run the scaffold's available type, lint, build, and test checks. Record actual commands and results in this plan; keep the README's run/check instructions current and inspect staged files for secrets.
 
 **Done when:** required cases pass, there is at least one meaningful automated test, and the end-to-end demo works. The specific fixed-signature HMAC bonus remains B1.
+
+**A6 verification on 2026-09-22 (lifecycle check pending):**
+
+- Created two real orders in the development store, with no customer contact details, taxes, shipping, or card charges. Per Vladimir's limit, each was **USD 0.50**, **USD 1.00 combined**. The initial USD 25.50 draft was reduced before order creation. Order `#1001` was created unpaid with no gateway and correctly classified non-COD; `#1002` was manually marked paid using `Cash on Delivery (COD)` and correctly classified COD. Both arrived through Shopify's actual `orders/create` subscription. The embedded dashboard's Refresh showed 2 orders, 1 COD, 50%, USD 1.00, and both correct rows.
+- Sent separately signed requests to the live tunnel: invalid HMAC returned 401; malformed JSON and missing required fields returned 400; an unknown shop returned 200. None wrote orders or receipts. Replayed exactly the same raw body and `X-Shopify-Webhook-Id`: both requests returned 200, and the second changed neither orders nor receipts. A different delivery ID for the same order also kept the order count unchanged.
+- Added 19 clearly named, zero-value synthetic order deliveries through HTTP. Refresh showed 21 orders, 20 COD, 95.2%, USD 1.00, and exactly 20 latest rows. The oldest USD 0.50 order was outside the table but remained in the USD 1.00 aggregate. Empty-state behavior was verified before these orders and is also covered by automated tests.
+- Ran `npm run shopify -- app webhook trigger --topic orders/create --api-version 2025-10 --delivery-method http --address <development-endpoint>`, with the client secret supplied privately via `SHOPIFY_FLAG_CLIENT_SECRET`. The remote command reported enqueued delivery. A temporary loopback receiver then verified the CLI sample's HMAC and forwarded its unchanged body and Shopify headers to the live endpoint, confirming HTTP 400. The fixed sample's numeric ID is larger than `Number.MAX_SAFE_INTEGER`, so the existing deliberate validation rejects it rather than storing a rounded ID. Real Shopify orders and independently signed string-ID fixtures passed; the CLI sample is not evidence of a subscription failure.
+- Repeated the CLI check with `--topic app/uninstalled` and the uninstall endpoint. The signed sample for `shop.myshopify.com` returned HTTP 200 through the same temporary receiver, and the CLI reported successful local delivery. The installed development shop remained untouched.
+- `npm test` passed all **48 tests** against disposable migrated databases, including two-shop isolation, transaction failure/rollback/retry, repeated uninstall, late deliveries, and both uninstall/order race directions. `npm run typecheck`, `npm run lint`, and `npm run build` passed. Build output contained only the existing React Router future-option notices.
+- `git diff --cached --check` passed; staged documentation was checked against the actual private app secret and credential/token patterns without printing credentials. The live uninstall confirmation remains open; no uninstall has occurred yet. README finish and elapsed time remain blank until A7.
 
 ### A7 - Finish documentation and prepare the submission
 

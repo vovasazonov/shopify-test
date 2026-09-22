@@ -64,4 +64,4 @@ For 10,000 merchants, move to PostgreSQL and a durable webhook queue with worker
 
 Historical order backfill, Shopify order tagging, `orders/updated`, compliance webhooks, custom OAuth, production hosting, and advanced dashboard controls are outside the current implementation. The optional fixed-signature HMAC bonus test has not been completed.
 
-Required work still in progress: live Shopify end-to-end verification, including uninstall/reinstall.
+Required verification still pending: live uninstall/reinstall. Real Shopify order delivery and dashboard behavior have been verified.
