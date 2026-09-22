@@ -45,6 +45,7 @@ Classification reflects the order creation event and does not mean payment has b
 - Commit the delivery receipt and order together. Database uniqueness on `(shop, webhookId)` and `(shop, orderId)` prevents double counting. Return 200 after commit or for duplicates/unknown shops; storage failures return 503 so the delivery can retry.
 - Keep IDs as strings and monetary amounts as exact decimal text, using Big.js for arithmetic. Keep totals separate by currency. Reject unsafe numeric IDs instead of silently rounding them.
 - Persist only the required order fields and COD result. Log delivery identifiers and outcomes without customer payloads or secrets.
+- Derive the dashboard's shop from the authenticated session. Metrics cover all received orders; the table shows the latest 20 with UTC dates. Use Refresh to load new orders, and label totals as received order value rather than collected COD revenue.
 
 ## Actual time spent
 
@@ -62,4 +63,4 @@ For 10,000 merchants, move to PostgreSQL and a durable webhook queue with worker
 
 Historical order backfill, Shopify order tagging, `orders/updated`, compliance webhooks, custom OAuth, production hosting, and advanced dashboard controls are outside the current implementation. The optional fixed-signature HMAC bonus test has not been completed.
 
-Required work still in progress: the dashboard, complete uninstall cleanup, and live Shopify end-to-end verification.
+Required work still in progress: complete uninstall cleanup and live Shopify end-to-end verification.

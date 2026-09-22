@@ -2,7 +2,7 @@
 
 Build a small embedded Shopify app that receives new orders, identifies Cash-On-Delivery (COD) orders, and shows a dashboard for the current shop.
 
-Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 setup and installation are complete; A2 storage and A3 webhook processing are complete locally. A4, the embedded dashboard, is next. Real Shopify order delivery remains A6.
+Based on the five-page `Shopify-Interview-Task.pdf`, including its setup appendix. This plan covers implementation, verification, documentation, and the presentation. A1 setup and installation are complete; A2 storage, A3 webhook processing, and A4 dashboard are implemented and verified locally. The dashboard also opens inside Shopify. A5 uninstall cleanup is next. Real Shopify order delivery remains A6.
 
 ## Priorities and working rules
 
@@ -89,12 +89,16 @@ Depends on A1 and A2.
 
 Depends on A2 and A3.
 
-- [ ] Authenticate the admin request and derive its shop from the authenticated session, never from a user-supplied shop parameter.
-- [ ] Show total orders received, COD orders, COD percentage, and total order value using all stored orders for that shop.
-- [ ] Calculate COD share as `COD orders / all orders * 100`, with `0%` for an empty shop.
-- [ ] Show the latest 20 orders sorted by order creation time, using order ID to break ties. Include name, date, formatted total/currency, gateway names, and COD yes/no.
-- [ ] Provide a useful empty state and readable error state. Use refresh/reload for the demo; live polling is optional.
-- [ ] Show monetary totals separately per currency if necessary; the displayed value is received order value, not collected COD revenue.
+**Complete:** the embedded Polaris dashboard derives its shop from the authenticated session, reads one shop-scoped order snapshot, and calculates metrics over all received orders while returning only the latest 20 rows. Amounts retain exact decimal precision and display currency codes; dates explicitly use UTC. Refresh revalidates the loader. Empty shops show zero counts/share and guidance; storage failures return 503 with a readable retry message, while authentication responses pass through to Shopify's boundary.
+
+**Verification on 2026-09-22:** `npm test` passed 40 tests, including six new dashboard cases using a fresh migrated temporary database. These cover an empty shop, 25-order aggregates versus 20 displayed rows, multiple currencies, creation-date/ID ordering, refresh after insertion, authenticated-shop isolation despite a different query parameter, authentication redirects, actual database-read failure, safe error output, and exact amount formatting. Loader tests stub only the admin authentication boundary; browser verification used the installed app's real authentication. Typecheck, lint, build, and diff checks passed. Inside Shopify, Refresh showed three temporary local sample orders, two COD orders, 66.7%, EUR 9.50, and USD 100.30 with the correct rows. All three samples and their receipts were removed, and another Refresh restored the zero/empty state. These were local storage fixtures; actual Shopify order delivery remains A6.
+
+- [x] Authenticate the admin request and derive its shop from the authenticated session, never from a user-supplied shop parameter.
+- [x] Show total orders received, COD orders, COD percentage, and total order value using all stored orders for that shop.
+- [x] Calculate COD share as `COD orders / all orders * 100`, with `0%` for an empty shop.
+- [x] Show the latest 20 orders sorted by order creation time, using order ID to break ties. Include name, date, formatted total/currency, gateway names, and COD yes/no.
+- [x] Provide a useful empty state and readable error state. Use refresh/reload for the demo; live polling is optional.
+- [x] Show monetary totals separately per currency if necessary; the displayed value is received order value, not collected COD revenue.
 
 **Done when:** a new order appears after refresh, figures match stored data, a fresh installation works with no orders, and another shop's data is inaccessible.
 
